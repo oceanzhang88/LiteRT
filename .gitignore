@@ -26,3 +26,4 @@ cmake-build-debug/
 .vscode/
 *.whl
 /.litert_configure.bazelrc
+.cache

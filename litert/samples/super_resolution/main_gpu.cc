@@ -1,162 +1,237 @@
-#include <algorithm>
-#include <cctype>
 #include <iostream>
+#include <memory>  // For std::unique_ptr
 #include <string>
-#include <vector>
 
 #include "absl/types/span.h"
+#include "image_processor.h"  // Assumed to be in include path
 #include "litert/c/litert_common.h"
 #include "litert/cc/litert_compiled_model.h"
 #include "litert/cc/litert_environment.h"
 #include "litert/cc/litert_model.h"
 #include "litert/cc/litert_options.h"
-#include "litert/cc/litert_tensor_buffer.h"
 #include "litert/cc/options/litert_gpu_options.h"
-#include "image_processor.h"
-#include "image_utils.h"
+
+#include "super_res_api.h"
 
 namespace {
-
-// Creates LiteRT GPU options.
-    litert::Options CreateGpuOptions(bool use_gl_buffers) {
-        LITERT_ASSIGN_OR_ABORT(auto gpu_options, litert::GpuOptions::Create());
-        if (use_gl_buffers) {
-            LITERT_ABORT_IF_ERROR(gpu_options.EnableExternalTensorsMode(true));
-        }
-        LITERT_ASSIGN_OR_ABORT(litert::Options options, litert::Options::Create());
-        options.SetHardwareAccelerators(kLiteRtHwAcceleratorGpu);
-        options.AddOpaqueOptions(std::move(gpu_options));
-        return options;
-    }
-
+// Helper function to create LiteRT GPU options.
+litert::Options CreateGpuOptions(bool use_gl_buffers) {
+  LITERT_ASSIGN_OR_ABORT(auto gpu_options, litert::GpuOptions::Create());
+  if (use_gl_buffers) {
+    LITERT_ABORT_IF_ERROR(
+        gpu_options.SetDelegatePrecision(kLiteRtDelegatePrecisionFp32));
+    LITERT_ABORT_IF_ERROR(gpu_options.SetBufferStorageType(
+        kLiteRtDelegateBufferStorageTypeBuffer));
+    LITERT_ABORT_IF_ERROR(gpu_options.EnableExternalTensorsMode(true));
+  } else {
+    LITERT_ABORT_IF_ERROR(gpu_options.EnableExternalTensorsMode(false));
+  }
+  LITERT_ASSIGN_OR_ABORT(litert::Options options, litert::Options::Create());
+  options.SetHardwareAccelerators(kLiteRtHwAcceleratorGpu);
+  options.AddOpaqueOptions(std::move(gpu_options));
+  return options;
+}
 }  // namespace
 
-// Export this function so it can be loaded from the .so
-extern "C" int run_super_resolution(int argc, char* argv[]) {
-    if (argc < 4 || argc > 5) {
-        std::cerr << "Usage: " << argv[0]
-                  << " <model_path> <input_image_path> <output_image_path> "
-                     "[use_gl_buffers (true|false)]"
-                  << std::endl;
-        return 1;
-    }
+// The implementation of the opaque handle
+struct SuperResSession {
+  std::unique_ptr<ImageProcessor> processor;
+  std::unique_ptr<litert::Environment> env;
+  std::unique_ptr<litert::Model> model;
+  std::unique_ptr<litert::CompiledModel> compiled_model;
+  std::unique_ptr<std::vector<litert::TensorBuffer>> input_buffers;
+  std::unique_ptr<std::vector<litert::TensorBuffer>> output_buffers;
 
-    const std::string model_path = argv[1];
-    const std::string input_file = argv[2];
-    const std::string output_file = argv[3];
-    bool use_gl_buffers = false;
-    if (argc == 5) {
-        std::string use_gl_buffers_arg = argv[4];
-        std::transform(use_gl_buffers_arg.begin(), use_gl_buffers_arg.end(),
-                       use_gl_buffers_arg.begin(), ::tolower);
-        use_gl_buffers = (use_gl_buffers_arg == "true");
-    }
+  // OpenGL resources
+  GLuint tex_id_orig = 0;
+  GLuint preprocessed_buffer_id = 0;
 
-    // Initialize the ImageProcessor
-    ImageProcessor processor;
-    if (!processor.InitializeGL("shaders/passthrough_shader.vert",
-                                "shaders/super_res_compute.glsl")) {
-        std::cerr << "Failed to initialize ImageProcessor." << std::endl;
-        return 1;
-    }
+  // Model dimensions
+  int input_width = 0;
+  int input_height = 0;
+  int input_channels = 0;
+  int output_width = 0;
+  int output_height = 0;
+  int output_channels = 0;
+};
 
-    // Initialize LiteRT environment and model
-    LITERT_ASSIGN_OR_ABORT(auto env, litert::Environment::Create({}));
-    LITERT_ASSIGN_OR_ABORT(auto model, litert::Model::CreateFromFile(model_path));
+extern "C" {
 
-    // Compile the model for the GPU
-    litert::Options options = CreateGpuOptions(use_gl_buffers);
-    LITERT_ASSIGN_OR_ABORT(auto compiled_model,
-                           litert::CompiledModel::Create(env, model, options));
+SuperResSession* SuperRes_Initialize(
+    const char* model_path, const char* passthrough_vert_shader_path,
+    const char* super_res_compute_shader_path, bool use_gl_buffers) {
+  auto session = std::make_unique<SuperResSession>();
 
-    // Create input and output buffers
-    LITERT_ASSIGN_OR_ABORT(auto input_buffers, compiled_model.CreateInputBuffers());
-    LITERT_ASSIGN_OR_ABORT(auto output_buffers, compiled_model.CreateOutputBuffers());
+  session->processor = std::make_unique<ImageProcessor>();
+  if (!session->processor->InitializeGL(passthrough_vert_shader_path,
+                                        super_res_compute_shader_path)) {
+    std::cerr << "Failed to initialize ImageProcessor." << std::endl;
+    return nullptr;
+  }
 
-    // ================= PRE-PROCESSING =================
-    // Load the input image
-    int width_orig = 0, height_orig = 0, channels_file = 0, loaded_channels = 3;
-    auto img_data_cpu = ImageUtils::LoadImage(input_file, width_orig, height_orig,
-                                              channels_file, loaded_channels);
-    if (!img_data_cpu) {
-        std::cerr << "Failed to load image file: " << input_file << std::endl;
-        return 1;
-    }
-    GLuint tex_id_orig = processor.CreateOpenGLTexture(img_data_cpu, width_orig,
-                                                       height_orig, loaded_channels);
-    ImageUtils::FreeImageData(img_data_cpu);
-    if (!tex_id_orig) {
-        std::cerr << "Failed to create OpenGL texture for image" << std::endl;
-        return 1;
-    }
+  LITERT_ASSIGN_OR_ABORT(auto env, litert::Environment::Create({}));
+  session->env = std::make_unique<litert::Environment>(std::move(env));
 
-    // Determine model input size
-    LITERT_ASSIGN_OR_ABORT(auto input_tensor_type, model.GetInputTensorType(0, 0));
-    int input_height = input_tensor_type.shape()[1];
-    int input_width = input_tensor_type.shape()[2];
-    int input_channels = 3;
+  LITERT_ASSIGN_OR_ABORT(auto model, litert::Model::CreateFromFile(model_path));
 
-    // Create and preprocess the input buffer
-    GLuint preprocessed_buffer_id = processor.CreateOpenGLBuffer(
-            nullptr, input_width * input_height * input_channels * sizeof(float));
+  // Get model dimensions
+  LITERT_ASSIGN_OR_ABORT(auto input_tensor_type,
+                         model.GetInputTensorType(0, 0));
+  session->input_height = input_tensor_type.Layout().Dimensions()[1];
+  session->input_width = input_tensor_type.Layout().Dimensions()[2];
+  session->input_channels = input_tensor_type.Layout().Dimensions()[3];
 
-    // Updated function call
-    if (!processor.PreprocessInputForSuperResolution(
-            tex_id_orig, input_width, input_height,
-            preprocessed_buffer_id)) {
-        std::cerr << "Failed to preprocess input image." << std::endl;
-        return 1;
-    }
+  LITERT_ASSIGN_OR_ABORT(auto output_tensor_type,
+                         model.GetOutputTensorType(0, 0));
+  session->output_height = output_tensor_type.Layout().Dimensions()[1];
+  session->output_width = output_tensor_type.Layout().Dimensions()[2];
+  session->output_channels = output_tensor_type.Layout().Dimensions()[3];
 
-    std::vector<float> preprocessed_data(input_width * input_height *
-                                         input_channels);
-    processor.ReadBufferData(preprocessed_buffer_id, 0,
-                             preprocessed_data.size() * sizeof(float),
-                             preprocessed_data.data());
-    LITERT_ABORT_IF_ERROR(
-            input_buffers[0].Write(absl::MakeConstSpan(preprocessed_data)));
+  session->model = std::make_unique<litert::Model>(std::move(model));
 
-    // ================= INFERENCE =================
-    bool async = false;
-    LITERT_ABORT_IF_ERROR(
-            compiled_model.RunAsync(0, input_buffers, output_buffers, async));
+  litert::Options options = CreateGpuOptions(use_gl_buffers);
+  LITERT_ASSIGN_OR_ABORT(
+      auto compiled_model,
+      litert::CompiledModel::Create(*session->env, *session->model, options));
+  session->compiled_model =
+      std::make_unique<litert::CompiledModel>(std::move(compiled_model));
 
-    // ================= POST-PROCESSING =================
-    if (output_buffers[0].HasEvent()) {
-        LITERT_ASSIGN_OR_ABORT(auto event, output_buffers[0].GetEvent());
-        event.Wait();
-    }
+  LITERT_ASSIGN_OR_ABORT(auto input_buffers,
+                         session->compiled_model->CreateInputBuffers());
+  session->input_buffers =
+      std::make_unique<std::vector<litert::TensorBuffer>>(std::move(input_buffers));
 
-    // Determine model output size
-    LITERT_ASSIGN_OR_ABORT(auto output_tensor_type, model.GetOutputTensorType(0, 0));
-    int output_height = output_tensor_type.shape()[1];
-    int output_width = output_tensor_type.shape()[2];
-    int output_channels = output_tensor_type.shape()[3];
+  LITERT_ASSIGN_OR_ABORT(auto output_buffers,
+                         session->compiled_model->CreateOutputBuffers());
+  session->output_buffers =
+      std::make_unique<std::vector<litert::TensorBuffer>>(std::move(output_buffers));
 
-    // Read the output buffer
-    std::vector<float> output_data(output_width * output_height *
-                                   output_channels);
-    LITERT_ABORT_IF_ERROR(output_buffers[0].Read(absl::MakeSpan(output_data)));
+  // Create the GL buffer for preprocessing
+  size_t buffer_size = session->input_width * session->input_height *
+                       session->input_channels * sizeof(float);
+  session->preprocessed_buffer_id =
+      session->processor->CreateOpenGLBuffer(nullptr, buffer_size);
+  if (session->preprocessed_buffer_id == 0) {
+    std::cerr << "Failed to create OpenGL preprocessed buffer." << std::endl;
+    return nullptr;  // Initialization failed
+  }
 
-    // Convert float output to uchar for saving
-    std::vector<unsigned char> output_uchar_data(output_data.size());
-    for (size_t i = 0; i < output_data.size(); ++i) {
-        output_uchar_data[i] = static_cast<unsigned char>(
-                std::max(0.0f, std::min(1.0f, output_data[i])) * 255.0f);
-    }
-
-    // Save the output image
-    if (!ImageUtils::SaveImage(output_file, output_width, output_height,
-                               output_channels, output_uchar_data.data())) {
-        std::cerr << "Failed to save the output image." << std::endl;
-        return 1;
-    }
-    std::cout << "Successfully saved super-resolution image to " << output_file
-              << std::endl;
-
-    // Cleanup
-    processor.DeleteOpenGLTexture(tex_id_orig);
-    processor.DeleteOpenGLBuffer(preprocessed_buffer_id);
-
-    return 0;
+  return session.release();  // Transfer ownership to the caller
 }
+
+void SuperRes_Shutdown(SuperResSession* session) {
+  if (!session) return;
+
+  // Cleanup GL resources
+  if (session->processor) {
+    if (session->tex_id_orig != 0) {
+      session->processor->DeleteOpenGLTexture(session->tex_id_orig);
+    }
+    if (session->preprocessed_buffer_id != 0) {
+      session->processor->DeleteOpenGLBuffer(session->preprocessed_buffer_id);
+    }
+    // ImageProcessor's destructor calls ShutdownGL()
+  }
+
+  // Let smart pointers handle the rest of the cleanup
+  delete session;
+}
+
+bool SuperRes_PreProcess(SuperResSession* session,
+                         const ImageData* input_image) {
+  if (!session || !input_image || !input_image->data) return false;
+
+  // Clean up previous texture if it exists
+  if (session->tex_id_orig != 0) {
+    session->processor->DeleteOpenGLTexture(session->tex_id_orig);
+    session->tex_id_orig = 0;
+  }
+
+  session->tex_id_orig = session->processor->CreateOpenGLTexture(
+      input_image->data, input_image->width, input_image->height,
+      input_image->channels);
+
+  if (!session->tex_id_orig) {
+    std::cerr << "Failed to create OpenGL texture for image" << std::endl;
+    return false;
+  }
+
+  if (!session->processor->PreprocessInputForSuperResolution(
+          session->tex_id_orig, session->input_width, session->input_height,
+          session->preprocessed_buffer_id)) {
+    std::cerr << "Failed to preprocess input image." << std::endl;
+    return false;
+  }
+
+  // Read data from GL buffer into a CPU-side vector
+  // This is needed for the input_buffers.Write call
+  std::vector<float> preprocessed_data(session->input_width *
+                                       session->input_height *
+                                       session->input_channels);
+  if (!session->processor->ReadBufferData(
+          session->preprocessed_buffer_id, 0,
+          preprocessed_data.size() * sizeof(float),
+          preprocessed_data.data())) {
+    std::cerr << "Failed to read preprocessed data from buffer." << std::endl;
+    return false;
+  }
+
+  // Write to the LiteRT input buffer
+  LITERT_ABORT_IF_ERROR(
+      (*session->input_buffers)[0].Write(absl::MakeConstSpan(preprocessed_data)));
+
+  return true;
+}
+
+bool SuperRes_Run(SuperResSession* session) {
+  if (!session) return false;
+
+  bool async = false;
+  LITERT_ABORT_IF_ERROR(session->compiled_model->RunAsync(
+      0, *session->input_buffers, *session->output_buffers, async));
+
+  return true;
+}
+
+bool SuperRes_PostProcess(SuperResSession* session, OutputData* output_data) {
+  if (!session || !output_data) return false;
+
+  if ((*session->output_buffers)[0].HasEvent()) {
+    LITERT_ASSIGN_OR_ABORT(auto event, (*session->output_buffers)[0].GetEvent());
+    event.Wait();
+  }
+
+  size_t output_size =
+      session->output_width * session->output_height * session->output_channels;
+
+  // We use a vector first to read the data
+  std::vector<float> output_vec(output_size);
+  LITERT_ABORT_IF_ERROR(
+      (*session->output_buffers)[0].Read(absl::MakeSpan(output_vec)));
+      
+  // Allocate memory for the output data buffer for the C-API
+  float* data_ptr = new (std::nothrow) float[output_size];
+  if (!data_ptr) {
+    std::cerr << "Failed to allocate memory for output data." << std::endl;
+    return false;
+  }
+
+  // Copy data to the allocated buffer
+  memcpy(data_ptr, output_vec.data(), output_size * sizeof(float));
+
+  output_data->data = data_ptr;
+  output_data->width = session->output_width;
+  output_data->height = session->output_height;
+  output_data->channels = session->output_channels;
+
+  return true;
+}
+
+void SuperRes_FreeOutputData(OutputData* output_data) {
+  if (output_data && output_data->data) {
+    delete[] output_data->data;
+    output_data->data = nullptr;
+  }
+}
+
+}  // extern "C"

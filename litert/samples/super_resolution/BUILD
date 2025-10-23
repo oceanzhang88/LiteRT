@@ -36,28 +36,41 @@ filegroup(
     ],
 )
 
+# --- Common C API Header ---
+cc_library(
+    name = "super_res_api",
+    hdrs = ["super_res_api.h"],
+)
+
 # --- GPU Targets ---
 
-cc_binary(
-    name = "super_res_lib_gpu.so",
+cc_library(
+    name = "super_res_lib_gpu_impl",
     srcs = ["main_gpu.cc"],
     copts = ["-I."],
     linkopts = litert_android_linkopts() + gles_linkopts(),
-    linkshared = True,
     deps = [
         ":image_processor",
         ":image_utils",
+        ":super_res_api",
         "//litert/cc:litert_api_with_dynamic_runtime",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
-        "@flatbuffers",  # CORRECTED dependency name
+        "@flatbuffers",
     ] + gles_deps() + gl_native_deps(),
 )
 
 cc_binary(
-    name = "super_res_loader_gpu",
-    srcs = ["main_loader_gpu.cc"],
+    name = "super_res_lib_gpu.so",
+    linkshared = True,
+    deps = [":super_res_lib_gpu_impl"],
+)
+
+cc_binary(
+    name = "super_res_standalone_gpu",
+    srcs = ["main_standalone_gpu.cc"],
+    copts = ["-I."],
     data = [
         ":model_files",
         ":shader_files",
@@ -66,79 +79,101 @@ cc_binary(
         "//litert/c:litert_runtime_c_api_shared_lib",
         "@litert_gpu//:jni/arm64-v8a/libLiteRtGpuAccelerator.so",
     ],
-    linkopts = ["-ldl"] + litert_android_linkopts(),
+    linkopts = litert_android_linkopts(),
+    deps = [
+        ":image_utils",
+        ":super_res_lib_gpu_impl",
+    ],
 )
 
 # --- CPU Targets ---
 
-cc_binary(
-    name = "super_res_lib_cpu.so",
+cc_library(
+    name = "super_res_lib_cpu_impl",
     srcs = ["main_cpu.cc"],
     copts = ["-I."],
-    linkopts = litert_android_linkopts() + gles_linkopts(),
-    linkshared = True,
+    linkopts = litert_android_linkopts(),
     deps = [
-        ":image_processor",
         ":image_utils",
+        ":super_res_api",
         "//litert/cc:litert_api_with_dynamic_runtime",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
-        "@flatbuffers",  # CORRECTED dependency name
-    ] + gles_deps() + gl_native_deps(),
+        "@flatbuffers",
+    ],
 )
 
 cc_binary(
-    name = "super_res_loader_cpu",
-    srcs = ["main_loader_cpu.cc"],
+    name = "super_res_lib_cpu.so",
+    linkshared = True,
+    deps = [":super_res_lib_cpu_impl"],
+)
+
+cc_binary(
+    name = "super_res_standalone_cpu",
+    srcs = ["main_standalone_cpu.cc"],
+    copts = ["-I."],
     data = [
         ":model_files",
-        ":shader_files",
         ":super_res_lib_cpu.so",
         ":test_images",
         "//litert/c:litert_runtime_c_api_shared_lib",
     ],
-    linkopts = ["-ldl"] + litert_android_linkopts(),
+    linkopts = litert_android_linkopts(),
+    deps = [
+        ":image_utils",
+        ":super_res_lib_cpu_impl",
+    ],
 )
 
 # --- NPU Targets ---
 
-cc_binary(
-    name = "super_res_lib_npu.so",
+cc_library(
+    name = "super_res_lib_npu_impl",
     srcs = ["main_npu.cc"],
     copts = ["-I."],
-    linkopts = gles_linkopts(),
-    linkshared = True,
     deps = [
-        ":image_processor",
         ":image_utils",
+        ":super_res_api",
         "//litert/cc:litert_api_with_dynamic_runtime",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
-        "@flatbuffers",  # CORRECTED dependency name
-    ] + gles_deps() + gl_native_deps(),
+        "@flatbuffers",
+    ],
 )
 
 cc_binary(
-    name = "super_res_loader_npu",
-    srcs = ["main_loader_npu.cc"],
+    name = "super_res_lib_npu.so",
+    linkshared = True,
+    deps = [":super_res_lib_npu_impl"],
+)
+
+cc_binary(
+    name = "super_res_standalone_npu",
+    srcs = ["main_standalone_npu.cc"],
+    copts = ["-I."],
     data = [
         ":model_files",
-        ":shader_files",
         ":super_res_lib_npu.so",
         ":test_images",
         "//litert/c:litert_runtime_c_api_shared_lib",
         "//litert/vendors/qualcomm/dispatch:dispatch_api_so",
         "@qairt//:lib/aarch64-android/libQnnHtp.so",
         "@qairt//:lib/aarch64-android/libQnnHtpPrepare.so",
+        "@qairt//:lib/aarch64-android/libQnnHtpV69Stub.so",
         "@qairt//:lib/aarch64-android/libQnnHtpV75Stub.so",
         "@qairt//:lib/aarch64-android/libQnnHtpV79Stub.so",
         "@qairt//:lib/aarch64-android/libQnnSystem.so",
+        "@qairt//:lib/hexagon-v69/unsigned/libQnnHtpV69Skel.so",
         "@qairt//:lib/hexagon-v75/unsigned/libQnnHtpV75Skel.so",
         "@qairt//:lib/hexagon-v79/unsigned/libQnnHtpV79Skel.so",
     ],
-    linkopts = ["-ldl"] + gles_linkopts(),
+    deps = [
+        ":image_utils",
+        ":super_res_lib_npu_impl",
+    ],
 )
 
 # --- Common Libraries ---
