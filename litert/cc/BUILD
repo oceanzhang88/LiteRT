@@ -59,15 +59,6 @@ cc_library(
 )
 
 cc_test(
-    name = "litert_detail_test",
-    srcs = ["litert_detail_test.cc"],
-    deps = [
-        "//litert/cc/internal:litert_detail",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_test(
     name = "litert_any_test",
     srcs = ["litert_any_test.cc"],
     linkopts = select({
@@ -101,6 +92,14 @@ cc_test(
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "litert_common",
+    hdrs = ["litert_common.h"],
+    deps = [
+        "//litert/c:litert_common",
     ],
 )
 
@@ -273,6 +272,7 @@ cc_library(
         # copybara:comment_end
     ],
     deps = [
+        ":litert_common",
         ":litert_environment",
         ":litert_expected",
         ":litert_layout",
@@ -684,12 +684,12 @@ cc_test(
         ":litert_macros",
         ":litert_model",
         ":litert_options",
+        ":litert_profiler",
+        ":litert_ranked_tensor_type",
         ":litert_tensor_buffer",
         "//litert/c:litert_common",
         "//litert/c:litert_tensor_buffer",
         "//litert/c:litert_tensor_buffer_types",
-        "//litert/cc:litert_profiler",
-        "//litert/cc:litert_ranked_tensor_type",
         "//litert/cc/options:litert_runtime_options",
         "//litert/test:common",
         "//litert/test:matchers",
@@ -985,9 +985,11 @@ cc_library(
         "//litert/c:litert_custom_tensor_buffer",
         "//litert/c:litert_event",
         "//litert/c:litert_gl_types",
+        "//litert/c:litert_model_types",
         "//litert/c:litert_tensor_buffer",
         "//litert/c:litert_tensor_buffer_types",
         "//litert/c/internal:litert_tensor_buffer_registry",  # buildcleaner: keep
+        "//litert/cc:litert_environment",
         "//litert/cc/internal:litert_detail",
         "//litert/cc/internal:litert_handle",
         "//litert/cc/internal:litert_tensor_buffer_without_registry",
@@ -1189,6 +1191,7 @@ cc_library(
     hdrs = [
         # C++ API headers.
         "litert_any.h",
+        "litert_common.h",
         "litert_buffer_ref.h",
         "litert_compiled_model.h",
         "litert_custom_op_kernel.h",
@@ -1261,6 +1264,7 @@ cc_library(
         # Other (static) C++ API targets.
         ":litert_any",
         ":litert_expected",
+        ":litert_common",
         ":litert_macros",
         ":litert_buffer_ref",
         ":litert_element_type",
