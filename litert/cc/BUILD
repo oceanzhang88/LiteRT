@@ -977,10 +977,12 @@ cc_library(
         # copybara:comment_end
     ],
     deps = [
+        ":litert_environment",
         ":litert_event",
         ":litert_expected",
         ":litert_macros",
         ":litert_ranked_tensor_type",
+        ":litert_tensor_buffer_types",
         "//litert/c:litert_common",
         "//litert/c:litert_custom_tensor_buffer",
         "//litert/c:litert_event",
@@ -989,7 +991,6 @@ cc_library(
         "//litert/c:litert_tensor_buffer",
         "//litert/c:litert_tensor_buffer_types",
         "//litert/c/internal:litert_tensor_buffer_registry",  # buildcleaner: keep
-        "//litert/cc:litert_environment",
         "//litert/cc/internal:litert_detail",
         "//litert/cc/internal:litert_handle",
         "//litert/cc/internal:litert_tensor_buffer_without_registry",
@@ -1087,6 +1088,7 @@ cc_library_with_testonly_vis(
         # copybara:comment_end
     ],
     deps = [
+        ":litert_common",
         ":litert_custom_op_kernel",
         ":litert_expected",
         ":litert_macros",
@@ -1263,6 +1265,7 @@ cc_library(
         "//litert/cc/dynamic_runtime/options:litert_runtime_options",
         # Other (static) C++ API targets.
         ":litert_any",
+        ":litert_tensor_buffer_types",
         ":litert_expected",
         ":litert_common",
         ":litert_macros",
@@ -1299,6 +1302,16 @@ cc_library(
             "//litert/cc/dynamic_runtime/options:litert_mediatek_options",
         ],
     }) + gles_headers(),
+)
+
+cc_library(
+    name = "litert_tensor_buffer_types",
+    srcs = ["litert_tensor_buffer_types.cc"],
+    hdrs = ["litert_tensor_buffer_types.h"],
+    deps = [
+        "//litert/c:litert_tensor_buffer_types",
+        "//litert/cc/internal:litert_tensor_buffer_utils",
+    ],
 )
 
 exports_files(glob([
