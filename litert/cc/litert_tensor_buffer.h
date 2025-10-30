@@ -51,11 +51,6 @@ class TensorBuffer
  public:
   TensorBuffer() = default;
 
-  // Parameter `owned` indicates if the created TensorBuffer object should take
-  // ownership of the provided `tensor_buffer` handle.
-  explicit TensorBuffer(LiteRtTensorBuffer tensor_buffer, OwnHandle owned)
-      : Handle(tensor_buffer, owned) {}
-
   // Creates a managed TensorBuffer object in a given buffer type and size.
   // The returned object is owned by the caller.
   static Expected<TensorBuffer> CreateManaged(
@@ -73,7 +68,7 @@ class TensorBuffer
   static Expected<TensorBuffer> CreateManaged(
       LiteRtEnvironment env, LiteRtTensorBufferType buffer_type,
       const RankedTensorType& tensor_type, size_t buffer_size) {
-    auto cc_env = Environment(env, OwnHandle::kNo);
+    auto cc_env = Environment::WrapCObject(env, OwnHandle::kNo);
     return CreateManaged(cc_env, buffer_type, tensor_type, buffer_size);
   }
 
@@ -135,7 +130,7 @@ class TensorBuffer
   static Expected<TensorBuffer> CreateFromAhwb(
       LiteRtEnvironment env, const RankedTensorType& tensor_type,
       AHardwareBuffer* ahwb, size_t ahwb_offset) {
-    auto cc_env = Environment(env, OwnHandle::kNo);
+    auto cc_env = Environment::WrapCObject(env, OwnHandle::kNo);
     return CreateFromAhwb(cc_env, tensor_type, ahwb, ahwb_offset);
   }
 
@@ -158,7 +153,7 @@ class TensorBuffer
   static Expected<TensorBuffer> CreateFromGlBuffer(
       LiteRtEnvironment env, const RankedTensorType& tensor_type,
       LiteRtGLenum target, LiteRtGLuint id, size_t size_bytes, size_t offset) {
-    auto cc_env = Environment(env, OwnHandle::kNo);
+    auto cc_env = Environment::WrapCObject(env, OwnHandle::kNo);
     return CreateFromGlBuffer(cc_env, tensor_type, target, id, size_bytes,
                               offset);
   }
@@ -184,7 +179,7 @@ class TensorBuffer
   static Expected<TensorBuffer> CreateFromMetalBuffer(
       LiteRtEnvironment env, const RankedTensorType& tensor_type,
       LiteRtTensorBufferType buffer_type, void* buffer, size_t size_bytes) {
-    auto cc_env = Environment(env, OwnHandle::kNo);
+    auto cc_env = Environment::WrapCObject(env, OwnHandle::kNo);
     return CreateFromMetalBuffer(cc_env, tensor_type, buffer_type, buffer,
                                  size_bytes);
   }
@@ -387,7 +382,7 @@ class TensorBuffer
   Expected<Event> GetEvent() const {
     LiteRtEvent event;
     LITERT_RETURN_IF_ERROR(LiteRtGetTensorBufferEvent(Get(), &event));
-    return Event(event, OwnHandle::kNo);
+    return Event::WrapCObject(event, OwnHandle::kNo);
   }
 
   // Set the C++ Event object for the tensor buffer.
@@ -398,13 +393,6 @@ class TensorBuffer
                    "Expected an owned event");
     }
     LITERT_RETURN_IF_ERROR(LiteRtSetTensorBufferEvent(Get(), event.Release()));
-    return {};
-  }
-
-  // Set the C LiteRtEvent object for the tensor buffer.
-  // The function takes ownership of the passed LiteRtEvent object.
-  Expected<void> SetLiteRtEvent(LiteRtEvent& litert_event) {
-    LITERT_RETURN_IF_ERROR(LiteRtSetTensorBufferEvent(Get(), litert_event));
     return {};
   }
 
@@ -484,6 +472,21 @@ class TensorBuffer
     std::memcpy(data.data(), host_mem_addr, total_read_size);
     return {};
   }
+
+  /// \internal  Wraps a LiteRtTensorBuffer C object in a TensorBuffer C++
+  /// object.
+  ///
+  /// Warning: This is internal use only.
+  static TensorBuffer WrapCObject(LiteRtTensorBuffer tensor_buffer,
+                                  OwnHandle owned) {
+    return TensorBuffer(tensor_buffer, owned);
+  }
+
+ private:
+  // Parameter `owned` indicates if the created TensorBuffer object should take
+  // ownership of the provided `tensor_buffer` handle.
+  explicit TensorBuffer(LiteRtTensorBuffer tensor_buffer, OwnHandle owned)
+      : Handle(tensor_buffer, owned) {}
 };
 
 class TensorBufferScopedLock {

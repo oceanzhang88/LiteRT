@@ -21,17 +21,29 @@
 namespace litert {
 
 enum class HwAccelerators : int {
-  Nnone = kLiteRtHwAcceleratorNone,
-  Cpu = kLiteRtHwAcceleratorCpu,
-  Gpu = kLiteRtHwAcceleratorGpu,
-  Npu = kLiteRtHwAcceleratorNpu,
+  kNone = kLiteRtHwAcceleratorNone,
+  kCpu = kLiteRtHwAcceleratorCpu,
+  kGpu = kLiteRtHwAcceleratorGpu,
+  kNpu = kLiteRtHwAcceleratorNpu,
 #if defined(__EMSCRIPTEN__)
-  WebNn = kLiteRtHwAcceleratorWebNn,
+  kWebNn = kLiteRtHwAcceleratorWebNn,
 #endif  // __EMSCRIPTEN__
 };
 
-// A bit field of `LiteRtHwAccelerators` values.
-typedef int HwAcceleratorSet;
+// Type-safe bit field for HwAccelerators.
+struct HwAcceleratorSet {
+  int value;
+
+  explicit HwAcceleratorSet(int val) : value(val) {}
+};
+
+inline HwAcceleratorSet operator|(HwAccelerators lhs, HwAccelerators rhs) {
+  return HwAcceleratorSet(static_cast<int>(lhs) | static_cast<int>(rhs));
+}
+
+inline HwAcceleratorSet operator|(HwAcceleratorSet lhs, HwAccelerators rhs) {
+  return HwAcceleratorSet(lhs.value | static_cast<int>(rhs));
+}
 
 enum class DelegateBufferStorageType : int {
   kDefault = kLiteRtDelegateBufferStorageTypeDefault,

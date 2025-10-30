@@ -203,7 +203,7 @@ Expected<void> LiteRtCompiledModelT::InitializeRuntime(
   interpreter_options.SetUseSignatureTensorNames(true);
   int num_threads = 1;
   if (jit_compilation_options) {
-    auto opaque_options = litert::OpaqueOptions(
+    auto opaque_options = litert::OpaqueOptions::WrapCObject(
         jit_compilation_options->options, litert::OwnHandle::kNo);
 
     if (auto runtime_options = litert::FindOpaqueData<LiteRtRuntimeOptionsT>(
@@ -994,7 +994,8 @@ Expected<void> LiteRtCompiledModelT::RegisterBuffer(
           buffer_is_cpu_compatible = true;
         }
       }
-    } else if (buffer->buffer_type() == kLiteRtTensorBufferTypeFastRpc) {
+    } else if (buffer->buffer_type() == kLiteRtTensorBufferTypeFastRpc ||
+               buffer->buffer_type() == kLiteRtTensorBufferTypeDmaBuf) {
       buffer_is_cpu_compatible = true;
     }
 #endif
@@ -1451,11 +1452,9 @@ litert::Expected<void> LiteRtCompiledModelT::ResizeInputTensor(
                               "Failed to resize input tensor");
   }
 
-  // Clear cached buffer requirements for this tensor
-  LITERT_ASSIGN_OR_RETURN(const auto tensor_id,
-                          GetTensorIdentifier(*interp_, input_tensor));
-  cpu_buffer_requirements_.erase(tensor_id);
-
+  // Clear cached buffer requirements for all tensors since output and
+  // intermediate tensors may change shape after an explicit resize.
+  cpu_buffer_requirements_.clear();
   return {};
 }
 
