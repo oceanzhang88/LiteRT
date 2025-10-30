@@ -19,6 +19,7 @@ filegroup(
     srcs = [
         "shaders/passthrough_shader.vert",
         "shaders/super_res_compute.glsl",
+        "shaders/crop_resize.comp",  # <-- Changed from .spv to .comp to match uploaded file
     ],
 )
 
@@ -26,6 +27,7 @@ filegroup(
     name = "test_images",
     srcs = [
         "test_images/low_res_image.png",
+        "test_images/low_res_image2.jpeg", # Added this based on your file list
     ],
 )
 
@@ -33,6 +35,10 @@ filegroup(
     name = "model_files",
     srcs = [
         "models/super_res-float.tflite",
+        "models/real_x4v3-float.tflite",
+        "models/real_x4v3_8650-float.tflite",
+        "models/real_x4v3_8750-float.tflite",
+        "models/real_x4v3-w8a8.tflite",
     ],
 )
 
@@ -46,7 +52,7 @@ cc_library(
 
 cc_library(
     name = "super_res_lib_gpu_impl",
-    srcs = ["main_gpu.cc"],
+    srcs = ["backends/main_gpu.cc"],  # <-- Corrected path
     copts = ["-I."],
     linkopts = litert_android_linkopts() + gles_linkopts(),
     deps = [
@@ -90,12 +96,13 @@ cc_binary(
 
 cc_library(
     name = "super_res_lib_cpu_impl",
-    srcs = ["main_cpu.cc"],
+    srcs = ["backends/main_cpu.cc"], # This path was already correct
     copts = ["-I."],
     linkopts = litert_android_linkopts(),
     deps = [
         ":image_utils",
         ":super_res_api",
+        ":vulkan_image_processor",  # This dependency is correct
         "//litert/cc:litert_api_with_dynamic_runtime",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
@@ -131,7 +138,7 @@ cc_binary(
 
 cc_library(
     name = "super_res_lib_npu_impl",
-    srcs = ["main_npu.cc"],
+    srcs = ["backends/main_npu.cc"],  # <-- Corrected path
     copts = ["-I."],
     deps = [
         ":image_utils",
@@ -180,20 +187,32 @@ cc_binary(
 
 cc_library(
     name = "image_utils",
-    srcs = ["image_utils.cc"],
-    hdrs = ["image_utils.h"],
+    srcs = ["utils/image_utils.cc"],  # <-- Corrected path
+    hdrs = ["utils/image_utils.h"],  # <-- Corrected path
     deps = [
         "@stblib//:stb_image_hdrs",
     ],
 )
 
+# --- ADD THIS NEW TARGET ---
 cc_library(
-    name = "image_processor",
-    srcs = ["image_processor.cc"],
-    hdrs = ["image_processor.h"],
-    linkopts = gles_linkopts(),
+    name = "vulkan_image_processor",
+    srcs = ["image_processing/vulkan_image_processor.cc"],
+    hdrs = ["image_processing/vulkan_image_processor.h"],
+    copts = ["-I."],
+    # includes = ["image_processing/"], # <-- ADD THIS
+    linkopts = [
+        "-lvulkan",  # Links libvulkan.so from the Android NDK
+        "-llog",     # Links liblog.so for std::cout/cerr
+    ],
     deps = [
-        ":image_utils",
-        "@com_google_absl//absl/log:absl_check",
-    ] + gles_deps(),
+        # Add dependencies on our new modular libraries
+        "//litert/samples/super_resolution/image_processing/vulkan:vulkan_compute_pipeline",
+        "//litert/samples/super_resolution/image_processing/vulkan:vulkan_context",
+        "//litert/samples/super_resolution/image_processing/vulkan:vulkan_utils",
+        
+        # Keep existing dependencies
+        "@vulkan_headers",
+        # This library is self-contained and only needs the NDK
+    ],
 )

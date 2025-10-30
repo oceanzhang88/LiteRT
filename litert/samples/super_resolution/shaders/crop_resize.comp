@@ -1,0 +1,97 @@
+#version 450
+// This shader performs a central crop and bilinear resize in one pass.
+// We process an 8x8 block of output pixels per workgroup
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// Input: The 1500x1500 image (or any large image)
+layout (binding = 0, rgba8) uniform readonly image2D u_InputTexture;
+// Output: The 256x256 resulting image
+layout (binding = 1, rgba8) uniform writeonly image2D u_OutputTexture;
+
+// Push constants to pass in dimensions and crop info
+layout(push_constant) uniform PushConstants {
+    // e.g., (1500, 1500)
+    ivec2 in_dims;
+    // e.g., (512, 512)
+    ivec2 crop_dims;
+    // e.g., (256, 256)
+    ivec2 out_dims;
+} pc;
+
+// Bilinear sampling
+vec4 textureBilinear(vec2 uv) {
+    // Manually calculate coordinates and weights for bilinear interpolation
+    vec2 texel_pos = uv * vec2(pc.in_dims) - 0.5;
+    vec2 floor_pos = floor(texel_pos);
+    vec2 fract_pos = texel_pos - floor_pos;
+
+    ivec2 p00 = ivec2(floor_pos);
+    ivec2 p10 = p00 + ivec2(1, 0);
+    ivec2 p01 = p00 + ivec2(0, 1);
+    ivec2 p11 = p00 + ivec2(1, 1);
+
+    // Clamp coordinates to be within the source image bounds
+    p00 = clamp(p00, ivec2(0), pc.in_dims - 1);
+    p10 = clamp(p10, ivec2(0), pc.in_dims - 1);
+    p01 = clamp(p01, ivec2(0), pc.in_dims - 1);
+    p11 = clamp(p11, ivec2(0), pc.in_dims - 1);
+
+    // Load the four neighboring texels
+    vec4 v00 = imageLoad(u_InputTexture, p00);
+    vec4 v10 = imageLoad(u_InputTexture, p10);
+    vec4 v01 = imageLoad(u_InputTexture, p01);
+    vec4 v11 = imageLoad(u_InputTexture, p11);
+
+    // Interpolate along x
+    vec4 interp_x0 = mix(v00, v10, fract_pos.x);
+    vec4 interp_x1 = mix(v01, v11, fract_pos.x);
+
+    // Interpolate along y
+    return mix(interp_x0, interp_x1, fract_pos.y);
+}
+
+
+void main() {
+    // Get the global pixel coordinate for the output image (e.g., from 0 to 255)
+    ivec2 out_coord = ivec2(gl_GlobalInvocationID.xy);
+
+    // Stop if we're out of bounds (for non-multiple-of-8 dimensions)
+    if (out_coord.x >= pc.out_dims.x || out_coord.y >= pc.out_dims.y) {
+        return;
+    }
+
+    // --- CROP & RESIZE LOGIC ---
+
+    // 1. Calculate the central crop offsets
+    ivec2 crop_offset = (pc.in_dims - pc.crop_dims) / 2;
+
+    // 2. Calculate the corresponding coordinate in the 512x512 crop region
+    //    (e.g., out_coord (0,0) -> crop_coord (0,0); out_coord (255, 255) -> crop_coord (511, 511))
+    vec2 scale = vec2(pc.crop_dims - 1) / vec2(pc.out_dims - 1);
+    vec2 crop_coord = vec2(out_coord) * scale;
+
+    // 3. Translate crop coordinate to full input image coordinate
+    //    (e.g., crop_coord (0,0) -> in_coord (494, 494))
+    vec2 in_coord = crop_coord + vec2(crop_offset);
+
+    // 4. Normalize to UV coordinates for sampling
+    //    (e.g., in_coord (494, 494) -> uv (0.329, 0.329))
+    vec2 uv = in_coord / vec2(pc.in_dims);
+
+    // --- SAMPLING ---
+    // Use a custom bilinear sampler because we are reading from an
+    // image (storage) not a texture (sampler).
+    // Or, you could bind u_InputTexture as a combined image sampler.
+    // For simplicity here, we'll just read the nearest pixel.
+    // For high-quality, replace this with the textureBilinear() function above
+    // and bind u_InputTexture as a 'sampler2D' (binding = 0).
+
+    // Simple nearest-neighbor for demonstration
+    // vec4 color = imageLoad(u_InputTexture, ivec2(in_coord));
+
+    // High-quality bilinear sampling
+    vec4 color = textureBilinear(uv);
+
+    // 5. Write the final color to the output 256x256 image
+    imageStore(u_OutputTexture, out_coord, color);
+}

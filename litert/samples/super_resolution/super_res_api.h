@@ -1,85 +1,160 @@
-#ifndef SUPER_RESOLUTION_API_H_
-#define SUPER_RESOLUTION_API_H_
+#ifndef SUPER_RESOLUTION_SUPER_RES_API_H_
+#define SUPER_RESOLUTION_SUPER_RES_API_H_
 
-#include <stdbool.h>
-#include <stddef.h>
+#ifdef __ANDROID__
+// Forward-declare AHardwareBuffer
+struct AHardwareBuffer;
+#endif
 
+// --- FIX: Add C++ guards ---
+// This tells C++ compilers that the functions below use C-style linkage
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// Opaque handle to the super resolution session
+/** @brief An opaque handle to the TFLite Super-Resolution session. */
 typedef struct SuperResSession SuperResSession;
 
-// Struct for passing input image data
+/** @brief Holds input image data from a CPU buffer. */
 typedef struct {
-  unsigned char* data;
-  int width;
-  int height;
-  int channels;
+    /** @brief Pointer to the raw image data (e.g., from stbi_load). */
+    unsigned char* data;
+    /** @brief Width of the image in pixels. */
+    int width;
+    /** @brief Height of the image in pixels. */
+    int height;
+    /** @brief Number of channels (must be 4 for RGBA). */
+    int channels;
 } ImageData;
 
-// Struct for getting output data.
-// The 'data' buffer is allocated by the library and must be
-// freed by the caller using SuperRes_FreeOutputData.
+/** @brief Holds the output tensor data after post-processing. */
 typedef struct {
-  float* data;  // The model outputs float
-  int width;
-  int height;
-  int channels;
+    /** @brief Pointer to the output float data (owned by the session). */
+    float* data;
+    /** @brief Width of the output image. */
+    int width;
+    /** @brief Height of the output image. */
+    int height;
+    /** @brief Number of output channels (e.g., 4 for RGBA). */
+    int channels;
 } OutputData;
 
+/** @brief Selects the image pre-processing implementation. */
+typedef enum {
+    /** @brief Use the CPU (Eigen) implementation for crop/resize. */
+    kSuperResCpuPreprocessor,
+    /** @brief Use the Vulkan compute shader implementation for crop/resize. */
+    kSuperResVulkanPreprocessor
+} SuperRes_PreprocessorType;
+
+
+// --- API Functions ---
+
 /**
- * @brief Initializes the super resolution session.
+ * @brief Initializes a new super-resolution session.
+ *
  * @param model_path Path to the .tflite model file.
- * @param passthrough_vert_shader_path Path to the passthrough vertex shader.
- * @param super_res_compute_shader_path Path to the super res compute shader.
- * @param use_gl_buffers Whether to use GL buffers for GPU acceleration.
- * @return An opaque handle (SuperResSession*) or NULL on failure.
+ * @param preprocessor_type The type of preprocessor to use (CPU or Vulkan).
+ * @param passthrough_vert_shader_path (Not used by this backend, can be "").
+ * @param compute_shader_path Path to the crop_resize.spv SPIR-V shader.
+ * (Required only if preprocessor_type is Vulkan).
+ * @return A pointer to a new SuperResSession, or NULL on failure.
  */
 SuperResSession* SuperRes_Initialize(
-    const char* model_path, const char* passthrough_vert_shader_path,
-    const char* super_res_compute_shader_path, bool use_gl_buffers);
+    const char* model_path,
+    SuperRes_PreprocessorType preprocessor_type,
+    const char* passthrough_vert_shader_path,
+    const char* compute_shader_path
+);
 
 /**
- * @brief Shuts down the session and frees all associated resources.
- * @param session The handle returned by SuperRes_Initialize.
- */
-void SuperRes_Shutdown(SuperResSession* session);
-
-/**
- * @brief Pre-processes an input image and prepares it for inference.
- * @param session The session handle.
- * @param input_image The raw input image data.
+ * @brief Pre-processes an image from a CPU buffer.
+ *
+ * This path uses a staging buffer to upload the image to the GPU
+ * if the Vulkan preprocessor is selected.
+ *
+ * @param session A valid session handle from SuperRes_Initialize.
+ * @param input_image A pointer to an ImageData struct with input data.
  * @return true on success, false on failure.
  */
 bool SuperRes_PreProcess(SuperResSession* session, const ImageData* input_image);
 
+#ifdef __ANDROID__
 /**
- * @brief Runs the super resolution inference.
- * Must be called after a successful SuperRes_PreProcess.
- * @param session The session handle.
+ * @brief Pre-processes an image from an AHardwareBuffer (Android only).
+ *
+ * This path attempts a zero-copy import of the AHB into Vulkan
+ * if the Vulkan preprocessor is selected.
+ *
+ * @param session A valid session handle from SuperRes_Initialize.
+ * @param in_buffer A handle to the input AHardwareBuffer.
+ * @param in_width The width of the input buffer.
+ * @param in_height The height of the input buffer.
+ * @return true on success, false on failure.
+ */
+bool SuperRes_PreProcess_AHB(SuperResSession* session,
+                         AHardwareBuffer* in_buffer,
+                         int in_width,
+                         int in_height);
+#endif
+
+// --- NEWLY ADDED FUNCTION ---
+/**
+ * @brief Gets a pointer to the *internal* pre-processed float buffer.
+ *
+ * Data is valid until the next call to SuperRes_PreProcess or SuperRes_Shutdown.
+ * The session retains ownership of the data. DO NOT free it.
+ *
+ * @param session A valid session handle.
+ * @param width (out) Width of the pre-processed buffer.
+ * @param height (out) Height of the pre-processed buffer.
+ * @param channels (out) Channels of the pre-processed buffer.
+ * @return A const float* to the data, or nullptr on failure.
+ */
+const float* SuperRes_GetPreprocessedData(SuperResSession* session, 
+                                        int* width, int* height, int* channels);
+// ----------------------------
+
+/**
+ * @brief Runs the TFLite model inference.
+ *
+ * Pre-processing must be completed successfully before calling this.
+ *
+ * @param session A valid session handle.
  * @return true on success, false on failure.
  */
 bool SuperRes_Run(SuperResSession* session);
 
 /**
- * @brief Retrieves the inference result.
- * @param session The session handle.
- * @param output_data A pointer to an OutputData struct that will be filled.
- * The 'data' buffer is allocated by this function.
+ * @brief Gets the inference output data.
+ *
+ * Inference must be completed successfully before calling this.
+ *
+ * @param session A valid session handle.
+ * @param output_data A pointer to an OutputData struct to be filled.
+ * The 'data' pointer inside is owned by the session
+ * and must be freed via SuperRes_FreeOutputData.
  * @return true on success, false on failure.
  */
 bool SuperRes_PostProcess(SuperResSession* session, OutputData* output_data);
 
 /**
  * @brief Frees the data buffer allocated by SuperRes_PostProcess.
- * @param output_data The struct containing the data to free.
+ *
+ * @param output_data A pointer to the OutputData struct that was filled.
  */
 void SuperRes_FreeOutputData(OutputData* output_data);
 
+/**
+ * @brief Shuts down the session and releases all resources.
+ *
+ * @param session The session handle to destroy.
+ */
+void SuperRes_Shutdown(SuperResSession* session);
+
+// --- FIX: Close the C++ guard ---
 #ifdef __cplusplus
-}  // extern "C"
+}
 #endif
 
-#endif  // SUPER_RESOLUTION_API_H_
+#endif // SUPER_RESOLUTION_SUPER_RES_API_H_
