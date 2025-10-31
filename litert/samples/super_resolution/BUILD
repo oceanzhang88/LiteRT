@@ -20,6 +20,7 @@ filegroup(
         "shaders/passthrough_shader.vert",
         "shaders/super_res_compute.glsl",
         "shaders/crop_resize.comp",  # <-- Changed from .spv to .comp to match uploaded file
+        "shaders/crop_resize.spv",   # <-- ADDED .spv file from your upload list
     ],
 )
 
@@ -28,6 +29,10 @@ filegroup(
     srcs = [
         "test_images/low_res_image.png",
         "test_images/low_res_image2.jpeg", # Added this based on your file list
+        # --- ADDED other test images from your upload list ---
+        "test_images/low_res_image3.png",
+        "test_images/00000_1618x1328_0006 (1).png",
+        "test_images/hand_art_sculpture_120875_1500x1500.jpg",
     ],
 )
 
@@ -56,7 +61,8 @@ cc_library(
     copts = ["-I."],
     linkopts = litert_android_linkopts() + gles_linkopts(),
     deps = [
-        ":image_processor",
+        # ":image_processor", # --- REMOVED ---
+        ":vulkan_image_processor", # --- ADDED ---
         ":image_utils",
         ":super_res_api",
         "//litert/cc:litert_api_with_dynamic_runtime",
@@ -79,10 +85,11 @@ cc_binary(
     copts = ["-I."],
     data = [
         ":model_files",
-        ":shader_files",
+        ":shader_files", # --- ADDED (for Vulkan preprocessor) ---
         ":super_res_lib_gpu.so",
         ":test_images",
         "//litert/c:litert_runtime_c_api_shared_lib",
+        # --- KEPT: This is the correct GPU accelerator library ---
         "@litert_gpu//:jni/arm64-v8a/libLiteRtGpuAccelerator.so",
     ],
     linkopts = litert_android_linkopts(),
@@ -123,6 +130,7 @@ cc_binary(
     copts = ["-I."],
     data = [
         ":model_files",
+        ":shader_files", # --- ADDED (was missing, but main_standalone_cpu.cc needs it) ---
         ":super_res_lib_cpu.so",
         ":test_images",
         "//litert/c:litert_runtime_c_api_shared_lib",
@@ -131,6 +139,7 @@ cc_binary(
     deps = [
         ":image_utils",
         ":super_res_lib_cpu_impl",
+        # "//litert/tools:benchmark_litert_model",  # <-- This was commented out in your file, leaving it commented
     ],
 )
 
@@ -191,6 +200,8 @@ cc_library(
     hdrs = ["utils/image_utils.h"],  # <-- Corrected path
     deps = [
         "@stblib//:stb_image_hdrs",
+        # # --- ADDED: AHB dependency for Android functions ---
+        # "//litert/c:litert_c_api", 
     ],
 )
 
@@ -200,7 +211,7 @@ cc_library(
     srcs = ["image_processing/vulkan_image_processor.cc"],
     hdrs = ["image_processing/vulkan_image_processor.h"],
     copts = ["-I."],
-    # includes = ["image_processing/"], # <-- ADD THIS
+    # includes = ["image_processing/"], # <-- ADD THIS (This syntax is not standard, copts = ["-I."] is correct)
     linkopts = [
         "-lvulkan",  # Links libvulkan.so from the Android NDK
         "-llog",     # Links liblog.so for std::cout/cerr
@@ -213,6 +224,14 @@ cc_library(
         
         # Keep existing dependencies
         "@vulkan_headers",
-        # This library is self-contained and only needs the NDK
+        # --- ADDED: AHB dependency for Android functions ---
+        # "//litert/c:litert_c_api", 
     ],
 )
+
+# --- REMOVED OLD OPENGL PROCESSOR ---
+# (You can delete this target if it's not used by anything else)
+# cc_library(
+#     name = "image_processor",
+#     ...
+# )

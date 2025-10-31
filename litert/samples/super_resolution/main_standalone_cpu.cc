@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 #include <algorithm> // For std::min/max
+#include <chrono>    // --- NEW: Include for timing ---
 
 #include "super_res_api.h"
 #include "utils/image_utils.h"
@@ -43,7 +44,7 @@ int main(int argc, char** argv) {
     std::string platform_str = GetFlagValue(argc, argv, "--platform=", "android");
     std::string preprocessor_type_str = GetFlagValue(argc, argv, "--preprocessor=", "vulkan");
     // --- NEW: Parse save_preprocessed flag ---
-    std::string save_preprocessed_str = GetFlagValue(argc, argv, "--save_preprocessed=", "true");
+    std::string save_preprocessed_str = GetFlagValue(argc, argv, "--save_preprocessed=", "false");
     bool save_preprocessed = (save_preprocessed_str == "true");
     // -----------------------------------------
     SuperRes_PreprocessorType preprocessor_type = kSuperResCpuPreprocessor;
@@ -116,7 +117,8 @@ int main(int argc, char** argv) {
     std::cout << "Loaded input image: " << img_width << "x" << img_height << "x" << img_channels << std::endl;
     
     // --- Pre-process ---
-    // This is where the new platform logic splits
+    // --- NEW: Start Pre-process Timer ---
+    auto start_preprocess = std::chrono::high_resolution_clock::now();
     
 #ifdef __ANDROID__
     AHardwareBuffer* ahb_handle = nullptr;
@@ -214,7 +216,14 @@ int main(int argc, char** argv) {
         // --------------------------------------------------
     }
 
+    // --- NEW: End Pre-process Timer ---
+    auto end_preprocess = std::chrono::high_resolution_clock::now();
+
+
     // --- Run Inference ---
+    // --- NEW: Start Run Timer ---
+    auto start_run = std::chrono::high_resolution_clock::now();
+    
     if (!SuperRes_Run(session)) {
         std::cerr << "Inference run failed." << std::endl;
 #ifdef __ANDROID__
@@ -223,9 +232,16 @@ int main(int argc, char** argv) {
         SuperRes_Shutdown(session);
         return 1;
     }
+    
+    // --- NEW: End Run Timer ---
+    auto end_run = std::chrono::high_resolution_clock::now();
     std::cout << "Inference complete." << std::endl;
 
+
     // --- Post-process & Save ---
+    // --- NEW: Start Post-process Timer ---
+    auto start_postprocess = std::chrono::high_resolution_clock::now();
+    
     OutputData output_data = {0};
     if (!SuperRes_PostProcess(session, &output_data)) {
         std::cerr << "Post-processing failed." << std::endl;
@@ -236,7 +252,26 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // --- NEW: End Post-process Timer ---
+    auto end_postprocess = std::chrono::high_resolution_clock::now();
     std::cout << "Output received: " << output_data.width << "x" << output_data.height << std::endl;
+
+
+    // --- NEW: Calculate and Print E2E Timings ---
+    double preprocess_ms = std::chrono::duration<double, std::milli>(end_preprocess - start_preprocess).count();
+    double run_ms = std::chrono::duration<double, std::milli>(end_run - start_run).count();
+    double postprocess_ms = std::chrono::duration<double, std::milli>(end_postprocess - start_postprocess).count();
+    double total_e2e_ms = preprocess_ms + run_ms + postprocess_ms;
+
+    std::cout << "\n--- End-to-End Timing Summary ---" << std::endl;
+    std::cout << "Pre-processing Time: " << preprocess_ms << " ms" << std::endl;
+    std::cout << "Inference Time (SuperRes_Run): " << run_ms << " ms" << std::endl;
+    std::cout << "Post-processing Time: " << postprocess_ms << " ms" << std::endl;
+    std::cout << "-----------------------------------" << std::endl;
+    std::cout << "Total E2E Time (Pre + Run + Post): " << total_e2e_ms << " ms" << std::endl;
+    std::cout << "-----------------------------------\n" << std::endl;
+    // ---------------------------------------------
+
 
     // Convert float output (e.g., RGBA) to unsigned char (RGB) for saving
     std::vector<unsigned char> output_image_bytes(output_data.width * output_data.height * 3); // Save as 3-channel RGB

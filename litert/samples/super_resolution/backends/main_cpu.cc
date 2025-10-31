@@ -1,6 +1,6 @@
 #include <iostream>
 #include <memory>
-#include <string>
+#include <string> // --- PROFILER SUMMARY: Added for std::string ---
 #include <vector>
 
 #include "absl/types/span.h"
@@ -13,6 +13,11 @@
 #include "litert/cc/litert_macros.h"
 #include "litert/cc/litert_options.h"
 #include "litert/cc/options/litert_cpu_options.h"
+
+// --- PROFILER: Include required headers ---
+#include "litert/cc/litert_profiler.h"
+#include "litert/cc/options/litert_runtime_options.h"
+// ------------------------------------------
 
 // Note: No ImageProcessor or GL headers needed for the *inference* backend
 #include "litert/samples/super_resolution/utils/image_utils.h" // For ImageUtils::ResizeImageBilinear
@@ -141,6 +146,13 @@ SuperResSession* SuperRes_Initialize(
     session->model = std::make_unique<litert::Model>(std::move(model));
 
     litert::Options options = CreateCpuOptions();
+
+    // --- PROFILER: Enable profiling in options ---
+    LITERT_ASSIGN_OR_ABORT(auto runtime_options, litert::RuntimeOptions::Create());
+    runtime_options.SetEnableProfiling(/*enabled=*/true);
+    options.AddOpaqueOptions(std::move(runtime_options));
+    // ---------------------------------------------
+
     LITERT_ASSIGN_OR_ABORT(auto compiled_model,
                            litert::CompiledModel::Create(*session->env, *session->model, options));
     session->compiled_model = std::make_unique<litert::CompiledModel>(std::move(compiled_model));
@@ -327,9 +339,79 @@ const float* SuperRes_GetPreprocessedData(SuperResSession* session,
 bool SuperRes_Run(SuperResSession* session) {
     if (!session) return false;
 
+    // --- PROFILER: Get profiler from model ---
+    LITERT_ASSIGN_OR_ABORT(auto profiler, session->compiled_model->GetProfiler());
+    if (!profiler) {
+        std::cerr << "Failed to get profiler." << std::endl;
+        // Continue without profiling
+    } else {
+        if (!profiler.StartProfiling()) {
+            std::cerr << "Failed to start profiling." << std::endl;
+            // Continue without profiling
+        }
+    }
+    // -----------------------------------------
+
     bool async = false;
     LITERT_ABORT_IF_ERROR(
         session->compiled_model->Run(*session->input_buffers, *session->output_buffers));
+
+    // --- PROFILER (ms): Get and print events in milliseconds ---
+    if (profiler) {
+        LITERT_ASSIGN_OR_ABORT(auto events, profiler.GetEvents());
+
+        // --- PROFILER SUMMARY: Calculate summary ---
+        double allocate_tensors_ms = 0.0;
+        double invoke_ms = 0.0;
+        double other_ms = 0.0;
+        double total_run_ms = 0.0;
+
+        // Optional: Print all events first for detailed debugging
+        std::cout << "\n--- All Profiler Events ---" << std::endl;
+        for (const auto& event : events) {
+          std::cout << "Event Tag: " << event.tag
+                    << ", Start (ms): " << (event.start_timestamp_us / 1000.0)
+                    << ", Elapsed (ms): " << (event.elapsed_time_us / 1000.0) << std::endl;
+        }
+        std::cout << "---------------------------\n" << std::endl;
+
+
+        // Calculate and print the summary
+        for (const auto& event : events) {
+            std::string tag(event.tag);
+            double elapsed_ms = event.elapsed_time_us / 1000.0;
+
+            if (tag == "AllocateTensors") {
+                allocate_tensors_ms += elapsed_ms;
+            } else if (tag == "Invoke") {
+                // We only want the main Invoke call, which has a non-zero start time.
+                // The other "Invoke" (start=0) is a child op.
+                if (event.start_timestamp_us > 0) {
+                    invoke_ms += elapsed_ms;
+                }
+            } else if (tag == "LiteRT::Run[buffer registration]" || tag == "LiteRT::Run[Buffer sync]") {
+                other_ms += elapsed_ms;
+            }
+        }
+
+        total_run_ms = allocate_tensors_ms + invoke_ms + other_ms;
+
+        // Print the summary
+        std::cout << "--- Full Runtime Breakdown ---" << std::endl;
+        std::cout << "AllocateTensors: " << allocate_tensors_ms << " ms" << std::endl;
+        std::cout << "Invoke (Inference): " << invoke_ms << " ms" << std::endl;
+        std::cout << "Other (Buffer sync/registration): " << other_ms << " ms" << std::endl;
+        std::cout << "--------------------------------" << std::endl;
+        std::cout << "Total time for Run call: " << total_run_ms << " ms" << std::endl;
+        std::cout << "--------------------------------\n" << std::endl;
+        // --- END PROFILER SUMMARY ---
+
+        // Reset the profiler for the next run
+        if (!profiler.Reset()) {
+            std::cerr << "Failed to reset profiler." << std::endl;
+        }
+    }
+    // ----------------------------------------------------------
 
     return true;
 }

@@ -1,35 +1,20 @@
 #!/bin/bash
-#
-# Copyright 2024 The Google AI Edge Authors. All Rights Reserved.
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#        http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
-
-# Script to deploy and run the super resolution sample on an Android device via ADB
 
 # --- Default values ---
 ACCELERATOR="gpu" # Default accelerator if not specified
-# NEW: Default pre-processor for the CPU backend
-PREPROCESSOR="cpu" 
+PREPROCESSOR="cpu" # Default pre-processor
 PHONE="s25" # Default phone model
 BINARY_BUILD_PATH=""
+SAVE_PREPROCESSED=false # Default save_preprocessed flag
 
 # --- Usage ---
 usage() {
-    # MODIFIED: Added --preprocessor option
-    echo "Usage: $0 --accelerator [gpu|npu|cpu] --preprocessor [cpu|vulkan] --phone [s24|s25] <binary_build_path>"
+    # MODIFIED: Added --save_preprocessed and updated descriptions
+    echo "Usage: $0 --accelerator [gpu|npu|cpu] --preprocessor [cpu|vulkan] --phone [s24|s25] [--save_preprocessed] <binary_build_path>"
     echo "  --accelerator : Specify the accelerator to use (gpu, npu, or cpu). Defaults to gpu."
-    echo "  --preprocessor: For 'cpu' accelerator, specify the pre-processor (cpu or vulkan). Defaults to cpu."
+    echo "  --preprocessor: Specify the pre-processor (cpu or vulkan). Applies to all accelerators. Defaults to cpu."
     echo "  --phone       : Specify the phone model (e.g., s24, s25) to select the correct NPU libraries. Defaults to s25."
+    echo "  --save_preprocessed : If set, saves the pre-processed tensor as 'preprocessed_output.png'."
     echo "  <binary_build_path> : The path to the binary build directory (e.g., bazel-bin/)."
     exit 1
 }
@@ -42,7 +27,6 @@ if [ "$#" -eq 0 ]; then
 fi
 
 # Initialize variables for options
-USE_GL_BUFFERS=false
 HOST_NPU_LIB=""
 HOST_NPU_DISPATCH_LIB=""
 POSITIONAL_ARGS=() # Array to hold non-option arguments
@@ -59,7 +43,6 @@ while [[ $# -gt 0 ]]; do
             fi
             shift # past argument=value
             ;;
-        # NEW: Parse --preprocessor argument
         --preprocessor=*)
             PREPROCESSOR="${1#*=}"
             if [[ "$PREPROCESSOR" != "cpu" && "$PREPROCESSOR" != "vulkan" ]]; then
@@ -72,10 +55,12 @@ while [[ $# -gt 0 ]]; do
             PHONE="${1#*=}"
             shift # past argument=value
             ;;
-        --use_gl_buffers)
-            USE_GL_BUFFERS=true
+        # NEW: Added --save_preprocessed
+        --save_preprocessed)
+            SAVE_PREPROCESSED=true
             shift # past argument
             ;;
+        # REMOVED: --use_gl_buffers (obsolete)
         --host_npu_lib=*)
             HOST_NPU_LIB="${1#*=}"
             shift # past argument=value
@@ -99,11 +84,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "Selected Accelerator: $ACCELERATOR"
-# NEW: Show pre-processor choice only if relevant
-if [[ "$ACCELERATOR" == "cpu" ]]; then
-    echo "Selected Pre-processor: $PREPROCESSOR"
-fi
-echo "Use GL Buffers: $USE_GL_BUFFERS"
+echo "Selected Pre-processor: $PREPROCESSOR"
+echo "Save Preprocessed Image: $SAVE_PREPROCESSED"
 
 # Check for the correct number of positional arguments
 if [ "${#POSITIONAL_ARGS[@]}" -ne 1 ]; then
@@ -113,12 +95,8 @@ fi
 
 BINARY_BUILD_PATH="${POSITIONAL_ARGS[0]}"
 
-# NEW: Validate pre-processor is only used with CPU
-if [[ "$ACCELERATOR" != "cpu" && "$PREPROCESSOR" != "cpu" ]]; then
-    echo "Warning: --preprocessor option is only used with --accelerator=cpu. Ignoring."
-    PREPROCESSOR="cpu"
-fi
-
+# REMOVED: Validation block for pre-processor and CPU.
+# This is no longer needed, as Vulkan pre-processing works with all backends.
 
 # Check if the binary_build_path is a valid directory.
 if [ ! -d "$BINARY_BUILD_PATH" ]; then
@@ -223,13 +201,13 @@ echo "Created directories on device."
 adb push "${HOST_EXEC_PATH}" "${DEVICE_BASE_DIR}/${DEVICE_EXEC_NAME}"
 echo "Pushed executable."
 
-# Push shaders
-adb push "${HOST_SHADER_DIR}/passthrough_shader.vert" "${DEVICE_SHADER_DIR}/"
-adb push "${HOST_SHADER_DIR}/super_res_compute.glsl" "${DEVICE_SHADER_DIR}/"
-echo "Pushed GPU shaders."
+# REMOVED: Push old OpenGL shaders
+# adb push "${HOST_SHADER_DIR}/passthrough_shader.vert" "${DEVICE_SHADER_DIR}/"
+# adb push "${HOST_SHADER_DIR}/super_res_compute.glsl" "${DEVICE_SHADER_DIR}/"
+# echo "Pushed GPU shaders."
 
-# NEW: Push Vulkan pre-processor shader if needed
-if [[ "$ACCELERATOR" == "cpu" && "$PREPROCESSOR" == "vulkan" ]]; then
+# Push Vulkan pre-processor shader if needed
+if [[ "$PREPROCESSOR" == "vulkan" ]]; then
     # NOTE: Assuming crop_resize.spv is in the same host directory
     if [ -f "${HOST_SHADER_DIR}/crop_resize.spv" ]; then
         adb push "${HOST_SHADER_DIR}/crop_resize.spv" "${DEVICE_SHADER_DIR}/"
@@ -290,34 +268,25 @@ OUTPUT_PATH_REMOTE="./output_image.png"
 
 echo "Cleaning up previous run results"
 adb shell "rm -f ${DEVICE_BASE_DIR}/${OUTPUT_PATH_REMOTE}"
+adb shell "rm -f ${DEVICE_BASE_DIR}/preprocessed_output.png" # NEW: Clean up preprocessed image too
 
-# Base command
+# Base command (positional args are the same for all backends)
 RUN_COMMAND_ARGS="${MODEL_PATH_REMOTE} "
-
-# MODIFIED: Add image/output paths NEXT, as they are positional
 RUN_COMMAND_ARGS+="${IMAGE_PATH_REMOTE} ${OUTPUT_PATH_REMOTE} "
 
-# MODIFIED: Add backend-specific args as FLAGS, after positional args
-if [[ "$ACCELERATOR" == "gpu" ]]; then
-    # GPU backend needs vertex and compute shaders
-    RUN_COMMAND_ARGS+="./shaders/passthrough_shader.vert ./shaders/super_res_compute.glsl "
-elif [[ "$ACCELERATOR" == "cpu" ]]; then
-    # MODIFIED: The CPU backend uses flags, not positional args, for shaders.
-    if [[ "$PREPROCESSOR" == "vulkan" ]]; then
-        # Add the flags for vulkan
-        # Note: Using relative path "shaders/..." as C++ default, not "./shaders/..."
-        RUN_COMMAND_ARGS+="--preprocessor=vulkan --shader_path=shaders/crop_resize.spv "
-    else
-        # Add the flag for cpu
-        RUN_COMMAND_ARGS+="--preprocessor=cpu "
-    fi
+# SIMPLIFIED: Add pre-processor flags (now backend-agnostic)
+if [[ "$PREPROCESSOR" == "vulkan" ]]; then
+    RUN_COMMAND_ARGS+="--preprocessor=vulkan --shader_path=shaders/crop_resize.spv "
+else
+    RUN_COMMAND_ARGS+="--preprocessor=cpu "
 fi
-# NPU backend needs no shader args, so we add nothing.
 
-# Add GL buffer flag
-if [[ "$ACCELERATOR" == "gpu" ]] && $USE_GL_BUFFERS; then
-    RUN_COMMAND_ARGS+="true"
+# NEW: Add save_preprocessed flag
+if $SAVE_PREPROCESSED; then
+    RUN_COMMAND_ARGS+="--save_preprocessed=true "
 fi
+
+# REMOVED: Obsolete USE_GL_BUFFERS logic
 
 RUN_COMMAND="./${DEVICE_EXEC_NAME} ${RUN_COMMAND_ARGS}"
 
@@ -337,16 +306,17 @@ adb shell "${FULL_COMMAND}"
 
 echo ""
 echo "To pull the result:"
-LOCAL_OUTPUT_FILE="./output_image_${ACCELERATOR}_${PREPROCESSOR}.png" # MODIFIED: Unique output file
+LOCAL_OUTPUT_FILE="./output_image_${ACCELERATOR}_${PREPROCESSOR}.png"
 echo "  adb pull ${DEVICE_BASE_DIR}/${OUTPUT_PATH_REMOTE} ${LOCAL_OUTPUT_FILE}"
 adb pull "${DEVICE_BASE_DIR}/${OUTPUT_PATH_REMOTE}" "${LOCAL_OUTPUT_FILE}"
 
 
-# --- NEW: Define device path for the preprocessed image ---
-DEVICE_PREPROCESSED_IMAGE_PATH="preprocessed_output.png"
-# --- NEW: Pull the preprocessed image ---
-echo "Pulling preprocessed_output.png from device..."
-adb pull "${DEVICE_BASE_DIR}/${DEVICE_PREPROCESSED_IMAGE_PATH}" .
+# --- MODIFIED: Conditionally pull the preprocessed image ---
+if $SAVE_PROCESSED; then
+    DEVICE_PREPROCESSED_IMAGE_PATH="preprocessed_output.png"
+    echo "Pulling preprocessed_output.png from device..."
+    adb pull "${DEVICE_BASE_DIR}/${DEVICE_PREPROCESSED_IMAGE_PATH}" .
+fi
 # ----------------------------------------
 
 echo "Done."
