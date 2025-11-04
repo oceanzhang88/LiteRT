@@ -1,7 +1,6 @@
 #include "vulkan_context.h"
 #include <iostream>
 #include <stdexcept>
-#include <set>
 #include <vector>
 
 // --- ADD THIS BLOCK ---

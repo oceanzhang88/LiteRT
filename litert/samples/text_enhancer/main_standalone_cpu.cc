@@ -165,7 +165,6 @@ int main(int argc, char** argv) {
     // --- RENAMED: Struct types ---
     TextEnhancerOptions options = {};
     options.model_path = model_path;
-    options.shader_path = "";
     options.compute_shader_path = compute_shader_path;
     options.accelerator_name = "cpu";
     options.input_width = img_width;

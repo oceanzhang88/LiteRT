@@ -1,7 +1,6 @@
 #ifndef SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_CONTEXT_H_
 #define SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_CONTEXT_H_
 
-#include <vector>
 #include <vulkan/vulkan.h>
 
 class VulkanContext {

@@ -31,7 +31,6 @@ typedef enum {
  */
 typedef struct {
     const char* model_path;
-    const char* shader_path;
     const char* compute_shader_path;  // Optional, for Vulkan
     const char* accelerator_name;     // "cpu", "gpu", "npu", "dummy"
     int input_width;                  // Required input width
