@@ -8,12 +8,10 @@
 #include "vulkan/vulkan_context.h"
 #include "vulkan/vulkan_compute_pipeline.h"
 
-// --- ADD THIS BLOCK ---
 #ifdef __ANDROID__
 #include <android/hardware_buffer.h>
 #include <vulkan/vulkan_android.h> // For PFN types
 #endif
-// --- END OF BLOCK ---
 
 
 // Note: CropResizePushConstants is now defined in vulkan_compute_pipeline.h
@@ -52,10 +50,10 @@ class VulkanImageProcessor {
                          int in_width, int in_height, int in_channels,
                          float* out_data);
 
-    // --- ADD THIS BLOCK ---
     #ifdef __ANDROID__
     /**
      * @brief Performs center-crop and resize using an AHardwareBuffer as input.
+     * (NOTE: This version performs a CPU readback.)
      *
      * @param in_buffer Pointer to the source AHardwareBuffer.
      * @param in_width Width of the source image (must match AHB).
@@ -66,8 +64,27 @@ class VulkanImageProcessor {
     bool PreprocessImage(AHardwareBuffer* in_buffer,
                          int in_width, int in_height,
                          float* out_data);
+
+    /**
+     * @brief Performs center-crop and resize (Zero-Copy path).
+     * This populates the internal output AHardwareBuffer.
+     *
+     * @param in_buffer Pointer to the source AHardwareBuffer.
+     * @param in_width Width of the source image (must match AHB).
+     * @param in_height Height of the source image (must match AHB).
+     * @return true on success, false on failure.
+     */
+    bool PreprocessImage_ZeroCopy(AHardwareBuffer* in_buffer,
+                                  int in_width, int in_height);
+
+    /**
+     * @brief Gets the handle to the persistent output AHardwareBuffer.
+     * This buffer is the destination for the Vulkan compute shader.
+     * @return AHardwareBuffer handle, or nullptr if not initialized.
+     */
+    AHardwareBuffer* GetOutputAhb() { return output_ahb_; }
+
     #endif // __ANDROID__
-    // --- END OF BLOCK ---
 
 
    private:
@@ -99,12 +116,16 @@ class VulkanImageProcessor {
     // Synchronization
     VkFence fence_ = VK_NULL_HANDLE;
 
-    // --- ADD THIS BLOCK ---
+    // --- AHB Zero-Copy Output ---
+    #ifdef __ANDROID__
+    AHardwareBuffer* output_ahb_ = nullptr;
+    #endif
+
     #ifdef __ANDROID__
     // --- AHB-related Function Pointers ---
     PFN_vkGetAndroidHardwareBufferPropertiesANDROID vkGetAndroidHardwareBufferPropertiesANDROID_ = nullptr;
+    PFN_vkGetMemoryAndroidHardwareBufferANDROID vkGetMemoryAndroidHardwareBufferANDROID_ = nullptr;
     #endif
-    // --- END OF BLOCK ---
 
     // --- Private Helper Functions ---
     bool createPersistentResources();

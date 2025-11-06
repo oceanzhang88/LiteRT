@@ -5,7 +5,7 @@
 # Prerequisites:
 # 1. Android device connected with 'adb'.
 # 2. 'bazel build' has been run for the desired target
-#    (e.g., :text_enhancer_standalone_cpu).
+#    (e.g., :text_enhancer_standalone_npu).
 #
 # Usage:
 #   ./deploy_and_run_on_android.sh [OPTIONS] <bazel_bin_path>
@@ -16,7 +16,7 @@
 #     --accelerator=cpu|gpu|npu  (Default: cpu)
 #     --preprocessor=cpu|vulkan  (Default: cpu)
 #     --save_preprocessed        (Default: false)
-#     --phone=s25|s23            (Default: s23. Used for NPU lib path)
+#     --phone=s25|s23            (Default: s25. Used for NPU lib path & model)
 #
 
 set -e
@@ -25,9 +25,10 @@ set -e
 ACCELERATOR_NAME="cpu"
 PREPROCESSOR_TYPE="cpu"
 SAVE_PREPROCESSED=false
-PHONE_MODEL="s23"
-QNN_LIBS_PATH="/data/local/tmp/qnn_libs/s23_8gen2" # Default
-DISPATCH_LIB_PATH="/data/local/tmp/qnn_libs" # Default
+PHONE_MODEL="s25"
+HOST_NPU_LIB=""
+HOST_NPU_DISPATCH_LIB=""
+POSITIONAL_ARGS=() # Array to hold non-option arguments
 
 # --- Helper Function ---
 show_help() {
@@ -39,83 +40,131 @@ show_help() {
     echo "  --accelerator=cpu|gpu|npu  (Default: cpu)"
     echo "  --preprocessor=cpu|vulkan  (Default: cpu)"
     echo "  --save_preprocessed        (Default: false)"
-    echo "  --phone=s25|s23            (Default: s23. Used for NPU lib path)"
-    echo "  --qnn_libs_path=<path>     (Optional. Overrides default QNN lib path on device)"
-    echo "  --dispatch_lib_path=<path> (Optional. Overrides default dispatch lib path on device)"
+    echo "  --phone=s25|vst            (Default: s25. Used for NPU lib path & model)"
+    echo "  --host_npu_lib=<path>          (Optional. Overrides default QNN host lib path)"
+    echo "  --host_npu_dispatch_lib=<path> (Optional. Overrides default dispatch host lib path)"
     echo "  --help                     Show this help message"
 }
 
 # --- Argument Parsing ---
-for i in "$@"
-do
-case $i in
-    --accelerator=*)
-    ACCELERATOR_NAME="${i#*=}"
-    shift
-    ;;
-    --preprocessor=*)
-    PREPROCESSOR_TYPE="${i#*=}"
-    shift
-    ;;
-    --save_preprocessed)
-    SAVE_PREPROCESSED=true
-    shift
-    ;;
-    --phone=*)
-    PHONE_MODEL="${i#*=}"
-    shift
-    ;;
-    --qnn_libs_path=*)
-    QNN_LIBS_PATH="${i#*=}"
-    shift
-    ;;
-    --dispatch_lib_path=*)
-    DISPATCH_LIB_PATH="${i#*=}"
-    shift
-    ;;
-    --help)
-    show_help
-    exit 0
-    ;;
-    -*)
-    echo "Error: Unknown option: $i"
-    show_help
-    exit 1
-    ;;
-esac
-done
-
-BAZEL_BIN_PATH="$1"
-if [ -z "$BAZEL_BIN_PATH" ]; then
-    echo "Error: Missing <bazel_bin_path> argument."
+if [ "$#" -eq 0 ]; then
+    echo "Error: No arguments provided."
     show_help
     exit 1
 fi
 
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --accelerator=*)
+        ACCELERATOR_NAME="${1#*=}"
+        # Validate accelerator value
+        if [[ "$ACCELERATOR_NAME" != "gpu" && "$ACCELERATOR_NAME" != "npu" && "$ACCELERATOR_NAME" != "cpu" ]]; then
+            echo "Error: Invalid value for --accelerator. Must be 'gpu', 'npu', or 'cpu'." >&2
+            show_help
+            exit 1
+        fi
+        shift
+        ;;
+        --preprocessor=*)
+        PREPROCESSOR_TYPE="${1#*=}"
+        shift
+        ;;
+        --save_preprocessed)
+        SAVE_PREPROCESSED=true
+        shift
+        ;;
+        --phone=*)
+        PHONE_MODEL="${1#*=}"
+        shift
+        ;;
+        --host_npu_lib=*)
+        HOST_NPU_LIB="${1#*=}"
+        shift
+        ;;
+        --host_npu_dispatch_lib=*)
+        HOST_NPU_DISPATCH_LIB="${1#*=}"
+        shift
+        ;;
+        --help)
+        show_help
+        exit 0
+        ;;
+        -*)
+        echo "Error: Unknown or unsupported option format: $1" >&2
+        echo "Please use the format --option=value"
+        show_help
+        exit 1
+        ;;
+        *)
+        # Assume this is a positional argument
+        POSITIONAL_ARGS+=("$1")
+        shift
+        ;;
+    esac
+done
+
+# Check for the correct number of positional arguments
+if [ "${#POSITIONAL_ARGS[@]}" -ne 1 ]; then
+    echo "Error: Incorrect number of arguments. Expected exactly one <bazel_bin_path>."
+    show_help
+    exit 1
+fi
+
+BAZEL_BIN_PATH="${POSITIONAL_ARGS[0]}"
 BAZEL_BIN_PATH=$(echo "$BAZEL_BIN_PATH" | sed 's:/*$::')
+
+# Check if the BAZEL_BIN_PATH is a valid directory.
+if [ ! -d "$BAZEL_BIN_PATH" ]; then
+    echo "Error: The provided bazel_bin_path ($BAZEL_BIN_PATH) is not a valid directory."
+    exit 1
+fi
 
 echo "Selected Accelerator: $ACCELERATOR_NAME"
 echo "Selected Pre-processor: $PREPROCESSOR_TYPE"
 echo "Save Preprocessed Image: $SAVE_PREPROCESSED"
+echo "Selected Phone Model: $PHONE_MODEL"
 
-if [ "$PHONE_MODEL" == "s25" ]; then
-    QNN_LIBS_PATH="/data/local/tmp/qnn_libs/s25_8gen4"
-    echo "Using QNN libraries path for S25 (8 Gen 4)."
-elif [ "$PHONE_MODEL" == "s23" ]; then
-    QNN_LIBS_PATH="/data/local/tmp/qnn_libs/s23_8gen2"
-    echo "Using QNN libraries path for S23 (8 Gen 2)."
-else
-    echo "Warning: Unknown phone model '$PHONE_MODEL'. Defaulting to: $QNN_LIBS_PATH"
+
+# --- NPU Configuration ---
+QNN_STUB_LIB=""
+QNN_SKEL_LIB=""
+QNN_SKEL_PATH_ARCH=""
+case "$PHONE_MODEL" in
+    'vst') # Assuming s23 -> 8 Gen 2 -> V75
+        QNN_STUB_LIB="libQnnHtpV69Stub.so"
+        QNN_SKEL_LIB="libQnnHtpV69Skel.so"
+        QNN_SKEL_PATH_ARCH="hexagon-v69"
+        echo "Configuring for XRGEN2+ using V69 NPU libraries."
+        ;;
+    's25') # Assuming s25 -> 8 Gen 4 -> V79
+        QNN_STUB_LIB="libQnnHtpV79Stub.so"
+        QNN_SKEL_LIB="libQnnHtpV79Skel.so"
+        QNN_SKEL_PATH_ARCH="hexagon-v79"
+        echo "Configuring for S25 (8 Gen 4) using V79 NPU libraries."
+        ;;
+    *)
+        if [ "$ACCELERATOR_NAME" == "npu" ]; then
+            echo "Error: Unsupported phone model '$PHONE_MODEL' for NPU. Supported models are 's23', 's25'." >&2
+            exit 1
+        fi
+        ;;
+esac
+
+# --- Model Selection ---
+# Select the correct model based on accelerator and phone
+MODEL_BASENAME="super_res-float_gpu.tflite" # Default for CPU/GPU
+if [[ "$ACCELERATOR_NAME" == "npu" ]]; then
+    if [[ "$PHONE_MODEL" == "vst" ]]; then
+        MODEL_BASENAME="super_res-float_npu_vst.tflite"
+    elif [[ "$PHONE_MODEL" == "s25" ]]; then
+        # MODEL_BASENAME="real_x4v3_8750-float.tflite"
+        MODEL_BASENAME="super_res-float_npu.tflite"
+    fi
+    echo "Using NPU Model: $MODEL_BASENAME"
 fi
 
-if [ "$DISPATCH_LIB_PATH" == "/data/local/tmp/qnn_libs" ]; then
-    echo "Defaulting to internal dispatch library."
-else
-    echo "Using custom dispatch library path: $DISPATCH_LIB_PATH"
-fi
 
-
-# --- RENAMED: Define Paths ---
+# --- Define Paths ---
 TARGET_DIR="/data/local/tmp/text_enhancer_android"
 
 # Paths relative to bazel-bin
@@ -126,19 +175,34 @@ RUNTIME_LIB_REL_PATH="litert/c/libLiteRtRuntimeCApi.so"
 # Paths relative to project root (now inside text_enhancer)
 SHADER_REL_PATH="litert/samples/text_enhancer/shaders/crop_resize.spv"
 IMAGE_REL_PATH="litert/samples/text_enhancer/test_images/low_res_image.png"
-MODEL_REL_PATH="litert/samples/text_enhancer/models/super_res-float.tflite"
+MODEL_DIR_REL_PATH="litert/samples/text_enhancer/models"
 
 # GPU-specific assets
-GPU_ACCELERATOR_LIB_REL_PATH="litert/gpu/libLiteRtGpuAccelerator.so"
+ROOT_DIR="litert/"
+PACKAGE_LOCATION="${ROOT_DIR}samples/text_enhancer"
+PACKAGE_NAME="text_enhancer_standalone_${ACCELERATOR_NAME}"
+HOST_GPU_LIBRARY_DIR="${PACKAGE_LOCATION}/libs"
+# HOST_GPU_LIBRARY_DIR="${BAZEL_BIN_PATH}/${PACKAGE_LOCATION}/${PACKAGE_NAME}.runfiles/litert_gpu/jni/arm64-v8a"
 
 # NPU-specific assets
-DISPATCH_LIB_REL_PATH="litert/vendors/qualcomm/dispatch/libdispatch_api.so"
+DEVICE_NPU_LIBRARY_DIR="${TARGET_DIR}/npu"
+LD_LIBRARY_PATH_ON_DEVICE="${DEVICE_NPU_LIBRARY_DIR}/"
+ADSP_LIBRARY_PATH_ON_DEVICE="${DEVICE_NPU_LIBRARY_DIR}/"
+
+# Set NPU library paths on host
+if [[ -z "$HOST_NPU_LIB" ]]; then
+    echo "Defaulting to QNN libraries path."
+    HOST_NPU_LIB="${BAZEL_BIN_PATH}/${PACKAGE_LOCATION}/${PACKAGE_NAME}.runfiles/qairt/lib/"
+fi
+if [[ -z "$HOST_NPU_DISPATCH_LIB" ]]; then
+    echo "Defaulting to internal dispatch library path."
+    HOST_NPU_DISPATCH_LIB="${BAZEL_BIN_PATH}/${PACKAGE_LOCATION}/${PACKAGE_NAME}.runfiles/litert/litert/vendors/qualcomm/dispatch"
+fi
 
 # Basenames for on-device paths
 EXECUTABLE_NAME_ON_DEVICE=$(basename "$EXECUTABLE_REL_PATH")
 LIB_NAME_ON_DEVICE=$(basename "$LIB_REL_PATH")
 RUNTIME_LIB_NAME_ON_DEVICE=$(basename "$RUNTIME_LIB_REL_PATH")
-MODEL_BASENAME=$(basename "$MODEL_REL_PATH")
 IMAGE_BASENAME=$(basename "$IMAGE_REL_PATH")
 
 OUTPUT_IMAGE="output_image.png"
@@ -152,7 +216,7 @@ echo "Using output path: $BAZEL_BIN_PATH/$EXECUTABLE_REL_PATH"
 adb shell "mkdir -p $TARGET_DIR/models"
 adb shell "mkdir -p $TARGET_DIR/test_images"
 adb shell "mkdir -p $TARGET_DIR/shaders"
-adb shell "mkdir -p $TARGET_DIR/npu/dsp"
+adb shell "mkdir -p $DEVICE_NPU_LIBRARY_DIR"
 echo "Created directories on device."
 
 adb push "$BAZEL_BIN_PATH/$EXECUTABLE_REL_PATH" "$TARGET_DIR/$EXECUTABLE_NAME_ON_DEVICE"
@@ -170,8 +234,8 @@ fi
 adb push "$IMAGE_REL_PATH" "$TARGET_DIR/test_images/"
 echo "Pushed test images."
 
-adb push "$MODEL_REL_PATH" "$TARGET_DIR/models/"
-echo "Pushed text enhancer model." # <-- Updated log message
+adb push "$MODEL_DIR_REL_PATH/$MODEL_BASENAME" "$TARGET_DIR/models/"
+echo "Pushed text enhancer model ($MODEL_BASENAME)."
 
 adb push "$BAZEL_BIN_PATH/$RUNTIME_LIB_REL_PATH" "$TARGET_DIR/$RUNTIME_LIB_NAME_ON_DEVICE"
 echo "Pushed C API shared library."
@@ -180,17 +244,27 @@ adb push "$BAZEL_BIN_PATH/$LIB_REL_PATH" "$TARGET_DIR/$LIB_NAME_ON_DEVICE"
 echo "Pushed project API library ($BAZEL_BIN_PATH/$LIB_REL_PATH)."
 
 # --- Push Accelerator-Specific Libs ---
-LD_PATH="$TARGET_DIR" 
+LD_PATH="$TARGET_DIR" # Default path for CPU/GPU
 
 if [ "$ACCELERATOR_NAME" == "gpu" ]; then
-    adb push "$BAZEL_BIN_PATH/$GPU_ACCELERATOR_LIB_REL_PATH" "$TARGET_DIR/"
+    adb push "$HOST_GPU_LIBRARY_DIR/libLiteRtOpenClAccelerator.so" "$TARGET_DIR/"
     echo "Pushed GPU accelerator library."
 fi
 
 if [ "$ACCELERATOR_NAME" == "npu" ]; then
-    adb push "$BAZEL_BIN_PATH/$DISPATCH_LIB_REL_PATH" "$TARGET_DIR/npu/"
+    echo "Pushing NPU libraries..."
+    adb push "${HOST_NPU_DISPATCH_LIB}/libLiteRtDispatch_Qualcomm.so" "${DEVICE_NPU_LIBRARY_DIR}/"
     echo "Pushed NPU dispatch library."
-    LD_PATH="$QNN_LIBS_PATH:$QNN_LIBS_PATH/dsp:$DISPATCH_LIB_PATH:$TARGET_DIR/npu:$TARGET_DIR"
+
+    adb push "${HOST_NPU_LIB}/aarch64-android/libQnnHtp.so" "${DEVICE_NPU_LIBRARY_DIR}/"
+    adb push "${HOST_NPU_LIB}/aarch64-android/${QNN_STUB_LIB}" "${DEVICE_NPU_LIBRARY_DIR}/"
+    adb push "${HOST_NPU_LIB}/aarch64-android/libQnnSystem.so" "${DEVICE_NPU_LIBRARY_DIR}/"
+    adb push "${HOST_NPU_LIB}/aarch64-android/libQnnHtpPrepare.so" "${DEVICE_NPU_LIBRARY_DIR}/"
+    adb push "${HOST_NPU_LIB}/${QNN_SKEL_PATH_ARCH}/unsigned/${QNN_SKEL_LIB}" "${DEVICE_NPU_LIBRARY_DIR}/"
+    echo "Pushed QNN NPU libraries."
+
+    # Update LD_PATH to include NPU libs and target dir
+    LD_PATH="$DEVICE_NPU_LIBRARY_DIR:$TARGET_DIR"
 fi
 
 adb shell "chmod +x $TARGET_DIR/$EXECUTABLE_NAME_ON_DEVICE"
@@ -213,7 +287,7 @@ if [ "$SAVE_PREPROCESSED" = true ]; then
     SAVE_PREPROCESSED_FLAG="--save_preprocessed=true"
 fi
 
-CMD="cd $TARGET_DIR && LD_LIBRARY_PATH=\"$LD_PATH\" ./$EXECUTABLE_NAME_ON_DEVICE \
+RUN_COMMAND="./$EXECUTABLE_NAME_ON_DEVICE \
      ./$LIB_NAME_ON_DEVICE \
      ./models/$MODEL_BASENAME \
      ./test_images/$IMAGE_BASENAME \
@@ -224,18 +298,28 @@ CMD="cd $TARGET_DIR && LD_LIBRARY_PATH=\"$LD_PATH\" ./$EXECUTABLE_NAME_ON_DEVICE
      --platform=android \
      "
 
+# 
+
+
+
+if [[ "$ACCELERATOR_NAME" == "npu" ]]; then
+    FULL_COMMAND="cd $TARGET_DIR && LD_LIBRARY_PATH=\"$LD_PATH\" ADSP_LIBRARY_PATH=\"$ADSP_LIBRARY_PATH_ON_DEVICE\" $RUN_COMMAND"
+else
+    FULL_COMMAND="cd $TARGET_DIR && LD_LIBRARY_PATH=\"$LD_PATH\" $RUN_COMMAND"
+fi
+
 echo ""
 echo "Deployment complete."
-echo "To run the text enhancer sample on the device, use a command like this:" # <-- Updated log
-echo "  adb shell \"$CMD\""
+echo "To run the text enhancer sample on the device, use a command like this:"
+echo "  adb shell \"$FULL_COMMAND\""
 
 # --- Execute the command ---
-adb shell "$CMD"
+adb shell "$FULL_COMMAND"
 
 # --- Pull Results ---
 echo ""
 echo "To pull the result:"
-OUTPUT_PULL_NAME="output_image_${ACCELERATOR_NAME}_${PREPROCESSOR_TYPE}.png"
+OUTPUT_PULL_NAME="output_image_${ACCELERATOR_NAME}_${PREPROCESSOR_TYPE}_${PHONE_MODEL}.png"
 echo "  adb pull $TARGET_DIR/$OUTPUT_IMAGE ./$OUTPUT_PULL_NAME"
 adb pull "$TARGET_DIR/$OUTPUT_IMAGE" "./$OUTPUT_PULL_NAME"
 

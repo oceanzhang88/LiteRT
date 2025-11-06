@@ -1,10 +1,12 @@
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_import.bzl", "cc_import")
+
 load(
     "//litert/build_common:special_rule.bzl",
     "gl_native_deps",
     "gles_deps",
-    "gles_linkopts",
+    # "gles_linkopts",
     "litert_android_linkopts",
 )
 
@@ -12,7 +14,7 @@ package(
     default_visibility = ["//visibility:public"],
 )
 
-# --- Common File Groups (paths are unchanged relative to BUILD) ---
+# --- Common File Groups ---
 
 filegroup(
     name = "shader_files",
@@ -38,44 +40,49 @@ filegroup(
 filegroup(
     name = "model_files",
     srcs = [
-        "models/super_res-float.tflite",
+        "models/super_res-float_npu.tflite",
+        "models/super_res-float_npu_vst.tflite",
+        "models/super_res-float_gpu.tflite",
         "models/real_x4v3-float.tflite",
         "models/real_x4v3_8650-float.tflite",
         "models/real_x4v3_8750-float.tflite",
         "models/real_x4v3-w8a8.tflite",
+        # "models/selfie_multiclass_256x256_SM8750.tflite",
     ],
 )
 
-# --- RENAMED: C API Header ---
+# --- C API Header ---
 cc_library(
     name = "text_enhancer_api",
     hdrs = ["text_enhancer_api.h"],
 )
 
-# --- RENAMED: CPU Targets ---
+# --- CPU Targets ---
 
 cc_library(
     name = "text_enhancer_lib_cpu_impl",
-    srcs = ["backends/text_enhancer_cpu.cc"], # <-- UPDATED: File name
+    srcs = ["backends/text_enhancer_cpu.cc"], 
     copts = ["-I."],
     linkopts = litert_android_linkopts(),
+    data = [],
     deps = [
         ":image_utils",
         ":text_enhancer_api",
         ":vulkan_image_processor",
         "//litert/cc:litert_api_with_dynamic_runtime",
-        "//litert/c:litert_runtime_c_api_shared_lib",
+        # "//litert/c:litert_runtime_c_api_shared_lib",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
         "@flatbuffers",
-        "@com_google_absl//absl/log",  # <-- FIX: Added Abseil Log dependency
+        "@com_google_absl//absl/log",  
     ],
 )
 
 cc_binary(
     name = "text_enhancer_lib_cpu.so",
     linkshared = True,
+    data = [],
     deps = [":text_enhancer_lib_cpu_impl"],
 )
 
@@ -96,32 +103,45 @@ cc_binary(
     ],
 )
 
-# --- RENAMED: GPU Targets ---
+# --- GPU Targets ---
+
+# Import the prebuilt GPU accelerator library
+# cc_import(
+#     name = "litert_gpu_accelerator_lib",
+#     shared_library = "@litert_gpu//:jni/arm64-v8a/libLiteRtOpenClAccelerator.so",
+# )
 
 cc_library(
     name = "text_enhancer_lib_gpu_impl",
-    srcs = ["backends/text_enhancer_gpu.cc"], # <-- UPDATED: File name
+    srcs = ["backends/text_enhancer_gpu.cc"], 
     copts = ["-I."],
-    linkopts = litert_android_linkopts() + gles_linkopts(),
+    linkopts = litert_android_linkopts(),  # + gles_linkopts(),
+    data = [],
     deps = [
         ":vulkan_image_processor",
         ":image_utils",
         ":text_enhancer_api",
         "//litert/cc:litert_api_with_dynamic_runtime",
-        "//litert/c:litert_runtime_c_api_shared_lib",
-        "@litert_gpu//:jni/arm64-v8a/libLiteRtGpuAccelerator.so",
+        # "@opencl_headers",
+        # "//litert/c:litert_runtime_c_api_shared_lib",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
         "@flatbuffers",
-        "@com_google_absl//absl/log",  # <-- Add this dependency here too
+        "@com_google_absl//absl/log",  
     ] + gles_deps() + gl_native_deps(),
 )
 
 cc_binary(
     name = "text_enhancer_lib_gpu.so",
     linkshared = True,
-    deps = [":text_enhancer_lib_gpu_impl"],
+    data = [
+        "//litert/c:litert_runtime_c_api_shared_lib",  # buildcleaner: keep
+        "@litert_gpu//:jni/arm64-v8a/libLiteRtOpenClAccelerator.so",  # copybara:comment
+    ],
+    deps = [
+        ":text_enhancer_lib_gpu_impl",
+    ],
 )
 
 cc_binary(
@@ -134,46 +154,56 @@ cc_binary(
         ":text_enhancer_lib_gpu.so",
         ":test_images",
     ],
-    linkopts = litert_android_linkopts() + ["-ldl"],
+    linkopts = litert_android_linkopts() + [
+        "-ldl",
+        "-Wl,--export-dynamic",  
+        ],
     deps = [
         ":image_utils",
         ":text_enhancer_api",
     ],
 )
 
-# --- RENAMED: NPU Targets ---
+# --- NPU Targets ---
 
 cc_library(
     name = "text_enhancer_lib_npu_impl",
-    srcs = ["backends/text_enhancer_npu.cc"], # <-- UPDATED: File name
+    srcs = ["backends/text_enhancer_npu.cc"], 
     copts = ["-I."],
+    linkopts = litert_android_linkopts(),
+    data = [],
     deps = [
+        ":vulkan_image_processor",
         ":image_utils",
         ":text_enhancer_api",
         "//litert/cc:litert_api_with_dynamic_runtime",
-        "//litert/c:litert_runtime_c_api_shared_lib",
-        "//litert/vendors/qualcomm/dispatch:dispatch_api_so",
-        "@qairt//:lib/aarch64-android/libQnnHtp.so",
-        "@qairt//:lib/aarch64-android/libQnnHtpPrepare.so",
-        "@qairt//:lib/aarch64-android/libQnnHtpV69Stub.so",
-        "@qairt//:lib/aarch64-android/libQnnHtpV75Stub.so",
-        "@qairt//:lib/aarch64-android/libQnnHtpV79Stub.so",
-        "@qairt//:lib/aarch64-android/libQnnSystem.so",
-        "@qairt//:lib/hexagon-v69/unsigned/libQnnHtpV69Skel.so",
-        "@qairt//:lib/hexagon-v75/unsigned/libQnnHtpV75Skel.so",
-        "@qairt//:lib/hexagon-v79/unsigned/libQnnHtpV79Skel.so",
+        # "//litert/c:litert_runtime_c_api_shared_lib",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
         "@flatbuffers",
-        "@com_google_absl//absl/log",  # <-- Add this dependency here too
+        "@com_google_absl//absl/log",  
     ],
 )
 
 cc_binary(
     name = "text_enhancer_lib_npu.so",
     linkshared = True,
-    deps = [":text_enhancer_lib_npu_impl"],
+    data = [
+        "//litert/vendors/qualcomm/dispatch:dispatch_api_so",
+        "@qairt//:lib/aarch64-android/libQnnHtp.so",
+        "@qairt//:lib/aarch64-android/libQnnHtpPrepare.so",
+        "@qairt//:lib/aarch64-android/libQnnSystem.so",
+        "@qairt//:lib/aarch64-android/libQnnHtpV69Stub.so",
+        "@qairt//:lib/aarch64-android/libQnnHtpV75Stub.so",
+        "@qairt//:lib/aarch64-android/libQnnHtpV79Stub.so",
+        "@qairt//:lib/hexagon-v69/unsigned/libQnnHtpV69Skel.so",
+        "@qairt//:lib/hexagon-v75/unsigned/libQnnHtpV75Skel.so",
+        "@qairt//:lib/hexagon-v79/unsigned/libQnnHtpV79Skel.so",
+    ],
+    deps = [
+        ":text_enhancer_lib_npu_impl",
+    ],
 )
 
 cc_binary(
@@ -192,15 +222,15 @@ cc_binary(
     ],
 )
 
-# --- RENAMED: Dummy Targets ---
+# --- Dummy Targets ---
 
 cc_library(
     name = "text_enhancer_lib_dummy_impl",
-    srcs = ["backends/text_enhancer_dummy.cc"], # <-- UPDATED: File name
+    srcs = ["backends/text_enhancer_dummy.cc"], 
     copts = ["-I."],
     deps = [
         ":text_enhancer_api",
-        "@com_google_absl//absl/log",  # <-- Add this dependency here too
+        "@com_google_absl//absl/log",  
     ],
 )
 
@@ -248,11 +278,10 @@ cc_library(
         "-llog", # This is for Android log, can be kept
     ],
     deps = [
-        # --- RENAMED: Assumes sub-directory is also renamed ---
         "//litert/samples/text_enhancer/image_processing/vulkan:vulkan_compute_pipeline",
         "//litert/samples/text_enhancer/image_processing/vulkan:vulkan_context",
         "//litert/samples/text_enhancer/image_processing/vulkan:vulkan_utils",
         "@vulkan_headers",
-        "@com_google_absl//absl/log",  # <-- Add this dependency here too
+        "@com_google_absl//absl/log",  
     ],
 )

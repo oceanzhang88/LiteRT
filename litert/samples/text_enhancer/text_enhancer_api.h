@@ -63,8 +63,7 @@ TextEnhancerSession* TextEnhancer_Initialize(const TextEnhancerOptions& options)
  * @return kTextEnhancerOk on success.
  */
 #ifdef __ANDROID__
-TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
-                                               AHardwareBuffer* buffer);
+TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session, AHardwareBuffer* buffer);
 #endif
 
 /**
@@ -101,8 +100,7 @@ TextEnhancerStatus TextEnhancer_Run(TextEnhancerSession* session, float* inferen
  * @param output A struct to be filled with the output image data and dims.
  * @return kTextEnhancerOk on success.
  */
-TextEnhancerStatus TextEnhancer_PostProcess(TextEnhancerSession* session,
-                                            TextEnhancerOutput& output);
+TextEnhancerStatus TextEnhancer_PostProcess(TextEnhancerSession* session, TextEnhancerOutput& output);
 
 /**
  * Frees the data buffer allocated within the TextEnhancerOutput struct.
