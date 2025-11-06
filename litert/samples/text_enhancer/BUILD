@@ -15,7 +15,7 @@ package(
 )
 
 # --- Common File Groups ---
-
+# ... (filegroups unchanged) ...
 filegroup(
     name = "shader_files",
     srcs = [
@@ -57,8 +57,28 @@ cc_library(
     hdrs = ["text_enhancer_api.h"],
 )
 
-# --- CPU Targets ---
+# --- Base Backend Library ---
+# ... (text_enhancer_session_base unchanged) ...
+cc_library(
+    name = "text_enhancer_session_base",
+    srcs = ["backends/base/text_enhancer_session_base.cc"],
+    hdrs = ["backends/base/text_enhancer_session_base.h"],
+    copts = ["-I."],
+    deps = [
+        ":image_utils",
+        ":text_enhancer_api",
+        ":vulkan_image_processor",
+        "//litert/cc:litert_api_with_dynamic_runtime",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
+        "@flatbuffers",
+        "@com_google_absl//absl/log",
+    ],
+)
 
+# --- CPU Targets ---
+# ... (text_enhancer_lib_cpu_impl unchanged) ...
 cc_library(
     name = "text_enhancer_lib_cpu_impl",
     srcs = ["backends/text_enhancer_cpu.cc"], 
@@ -66,16 +86,7 @@ cc_library(
     linkopts = litert_android_linkopts(),
     data = [],
     deps = [
-        ":image_utils",
-        ":text_enhancer_api",
-        ":vulkan_image_processor",
-        "//litert/cc:litert_api_with_dynamic_runtime",
-        # "//litert/c:litert_runtime_c_api_shared_lib",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/time",
-        "@com_google_absl//absl/types:span",
-        "@flatbuffers",
-        "@com_google_absl//absl/log",  
+        ":text_enhancer_session_base",
     ],
 )
 
@@ -86,31 +97,8 @@ cc_binary(
     deps = [":text_enhancer_lib_cpu_impl"],
 )
 
-cc_binary(
-    name = "text_enhancer_standalone_cpu",
-    srcs = ["main_standalone_cpu.cc"],
-    copts = ["-I."],
-    data = [
-        ":model_files",
-        ":shader_files",
-        ":text_enhancer_lib_cpu.so",
-        ":test_images",
-    ],
-    linkopts = litert_android_linkopts() + ["-ldl"],
-    deps = [
-        ":image_utils",
-        ":text_enhancer_api",
-    ],
-)
-
 # --- GPU Targets ---
-
-# Import the prebuilt GPU accelerator library
-# cc_import(
-#     name = "litert_gpu_accelerator_lib",
-#     shared_library = "@litert_gpu//:jni/arm64-v8a/libLiteRtOpenClAccelerator.so",
-# )
-
+# ... (text_enhancer_lib_gpu_impl unchanged) ...
 cc_library(
     name = "text_enhancer_lib_gpu_impl",
     srcs = ["backends/text_enhancer_gpu.cc"], 
@@ -118,17 +106,7 @@ cc_library(
     linkopts = litert_android_linkopts(),  # + gles_linkopts(),
     data = [],
     deps = [
-        ":vulkan_image_processor",
-        ":image_utils",
-        ":text_enhancer_api",
-        "//litert/cc:litert_api_with_dynamic_runtime",
-        # "@opencl_headers",
-        # "//litert/c:litert_runtime_c_api_shared_lib",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/time",
-        "@com_google_absl//absl/types:span",
-        "@flatbuffers",
-        "@com_google_absl//absl/log",  
+        ":text_enhancer_session_base",
     ] + gles_deps() + gl_native_deps(),
 )
 
@@ -144,28 +122,8 @@ cc_binary(
     ],
 )
 
-cc_binary(
-    name = "text_enhancer_standalone_gpu",
-    srcs = ["main_standalone_gpu.cc"],
-    copts = ["-I."],
-    data = [
-        ":model_files",
-        ":shader_files",
-        ":text_enhancer_lib_gpu.so",
-        ":test_images",
-    ],
-    linkopts = litert_android_linkopts() + [
-        "-ldl",
-        "-Wl,--export-dynamic",  
-        ],
-    deps = [
-        ":image_utils",
-        ":text_enhancer_api",
-    ],
-)
-
 # --- NPU Targets ---
-
+# ... (text_enhancer_lib_npu_impl unchanged) ...
 cc_library(
     name = "text_enhancer_lib_npu_impl",
     srcs = ["backends/text_enhancer_npu.cc"], 
@@ -173,16 +131,7 @@ cc_library(
     linkopts = litert_android_linkopts(),
     data = [],
     deps = [
-        ":vulkan_image_processor",
-        ":image_utils",
-        ":text_enhancer_api",
-        "//litert/cc:litert_api_with_dynamic_runtime",
-        # "//litert/c:litert_runtime_c_api_shared_lib",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/time",
-        "@com_google_absl//absl/types:span",
-        "@flatbuffers",
-        "@com_google_absl//absl/log",  
+        ":text_enhancer_session_base",
     ],
 )
 
@@ -206,24 +155,8 @@ cc_binary(
     ],
 )
 
-cc_binary(
-    name = "text_enhancer_standalone_npu",
-    srcs = ["main_standalone_npu.cc"],
-    copts = ["-I."],
-    data = [
-        ":model_files",
-        ":text_enhancer_lib_npu.so",
-        ":test_images",
-    ],
-    linkopts = litert_android_linkopts() + ["-ldl"],
-    deps = [
-        ":image_utils",
-        ":text_enhancer_api",
-    ],
-)
-
 # --- Dummy Targets ---
-
+# ... (text_enhancer_lib_dummy_impl unchanged) ...
 cc_library(
     name = "text_enhancer_lib_dummy_impl",
     srcs = ["backends/text_enhancer_dummy.cc"], 
@@ -240,23 +173,9 @@ cc_binary(
     deps = [":text_enhancer_lib_dummy_impl"],
 )
 
-cc_binary(
-    name = "text_enhancer_standalone_dummy",
-    srcs = ["main_standalone_dummy.cc"],
-    copts = ["-I."],
-    data = [
-        ":text_enhancer_lib_dummy.so",
-    ],
-    linkopts = litert_android_linkopts() + ["-ldl"], 
-    deps = [
-        ":image_utils",
-        ":text_enhancer_api",
-    ],
-)
-
 
 # --- Common Libraries (Internal paths are fine) ---
-
+# ... (image_utils, vulkan_image_processor unchanged) ...
 cc_library(
     name = "image_utils",
     srcs = ["utils/image_utils.cc"],
@@ -283,5 +202,85 @@ cc_library(
         "//litert/samples/text_enhancer/image_processing/vulkan:vulkan_utils",
         "@vulkan_headers",
         "@com_google_absl//absl/log",  
+    ],
+)
+
+
+# --- NEW: Common Standalone Library ---
+cc_library(
+    name = "main_standalone_common",
+    hdrs = ["main_standalone_common.h"],
+    deps = [
+        ":text_enhancer_api",
+        ":image_utils",
+        "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/flags:parse",
+        "@com_google_absl//absl/log:initialize",
+        "@com_google_absl//absl/log",
+    ],
+)
+
+# --- MODIFIED: Main Binaries (Standalone Examples) ---
+
+cc_binary(
+    name = "text_enhancer_standalone_cpu",
+    srcs = ["main_standalone_cpu.cc"], # MODIFIED
+    copts = ["-I."],
+    data = [
+        ":model_files",
+        ":shader_files",
+        ":text_enhancer_lib_cpu.so",
+        ":test_images",
+    ],
+    linkopts = litert_android_linkopts() + ["-ldl"],
+    deps = [
+        ":main_standalone_common", # MODIFIED
+    ],
+)
+
+cc_binary(
+    name = "text_enhancer_standalone_gpu",
+    srcs = ["main_standalone_gpu.cc"], # MODIFIED
+    copts = ["-I."],
+    data = [
+        ":model_files",
+        ":shader_files",
+        ":text_enhancer_lib_gpu.so",
+        ":test_images",
+    ],
+    linkopts = litert_android_linkopts() + [
+        "-ldl",
+        "-Wl,--export-dynamic",  
+        ],
+    deps = [
+        ":main_standalone_common", # MODIFIED
+    ],
+)
+
+cc_binary(
+    name = "text_enhancer_standalone_npu",
+    srcs = ["main_standalone_npu.cc"], # MODIFIED
+    copts = ["-I."],
+    data = [
+        ":model_files",
+        ":text_enhancer_lib_npu.so",
+        ":test_images",
+    ],
+    linkopts = litert_android_linkopts() + ["-ldl"],
+    deps = [
+        ":main_standalone_common", # MODIFIED
+    ],
+)
+
+cc_binary(
+    name = "text_enhancer_standalone_dummy",
+    srcs = ["main_standalone_dummy.cc"], # MODIFIED
+    copts = ["-I."],
+    data = [
+        ":text_enhancer_lib_dummy.so",
+    ],
+    linkopts = litert_android_linkopts() + ["-ldl"], 
+    deps = [
+        ":main_standalone_common", # MODIFIED
     ],
 )
