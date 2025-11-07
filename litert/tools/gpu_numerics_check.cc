@@ -32,6 +32,7 @@
 #include "absl/strings/string_view.h"  // from @com_google_absl
 #include "absl/types/span.h"  // from @com_google_absl
 #include "litert/c/litert_common.h"
+#include "litert/cc/litert_common.h"
 #include "litert/cc/litert_compiled_model.h"
 #include "litert/cc/litert_element_type.h"
 #include "litert/cc/litert_environment.h"
@@ -100,11 +101,11 @@ Expected<Environment> GetEnvironment() {
 
 Expected<Options> GetGpuOptions() {
   LITERT_ASSIGN_OR_RETURN(auto options, Options::Create());
-  options.SetHardwareAccelerators(kLiteRtHwAcceleratorGpu);
+  options.SetHardwareAccelerators(HwAccelerators::kGpu);
   LITERT_ASSIGN_OR_ABORT(auto gpu_options, GpuOptions::Create());
   gpu_options.EnableExternalTensorsMode(
       absl::GetFlag(FLAGS_external_tensor_mode));
-  gpu_options.SetDelegatePrecision(kLiteRtDelegatePrecisionFp32);
+  gpu_options.SetPrecision(GpuOptions::Precision::kFp32);
   if (absl::GetFlag(FLAGS_gpu_backend) == "webgpu") {
     gpu_options.SetGpuBackend(kLiteRtGpuBackendWebGpu);
   } else if (absl::GetFlag(FLAGS_gpu_backend) == "opengl") {
@@ -120,7 +121,7 @@ Expected<Options> GetGpuOptions() {
 
 Expected<Options> GetCpuOptions() {
   LITERT_ASSIGN_OR_RETURN(auto options, Options::Create());
-  options.SetHardwareAccelerators(kLiteRtHwAcceleratorCpu);
+  options.SetHardwareAccelerators(HwAccelerators::kCpu);
   return options;
 }
 
@@ -367,7 +368,16 @@ Expected<std::vector<BufferDiffStats>> RunModel(absl::string_view model_path) {
       CreateAndFillInputBuffers(compiled_model_cpu, signature_index));
   LITERT_ASSIGN_OR_RETURN(
       auto gpu_input_buffers,
-      CreateAndFillInputBuffers(compiled_model_gpu, signature_index));
+      compiled_model_gpu.CreateInputBuffers(signature_index));
+  // Copy input buffers from CPU to GPU.
+  for (size_t i = 0; i < cpu_input_buffers.size(); ++i) {
+    LITERT_ASSIGN_OR_RETURN(size_t buffer_size, cpu_input_buffers[i].Size());
+    std::vector<char> data(buffer_size);
+    LITERT_RETURN_IF_ERROR(
+        cpu_input_buffers[i].Read<char>(absl::MakeSpan(data)));
+    LITERT_RETURN_IF_ERROR(
+        gpu_input_buffers[i].Write<char>(absl::MakeSpan(data)));
+  }
 
   // Create output buffers
   LITERT_ASSIGN_OR_RETURN(

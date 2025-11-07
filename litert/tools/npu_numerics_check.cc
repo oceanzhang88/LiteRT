@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "absl/strings/string_view.h"  // from @com_google_absl
+#include "litert/cc/litert_common.h"
 #define INCLUDE_QUALCOMM_RUNTIME_FLAGS
 #define INCLUDE_MEDIATEK_RUNTIME_FLAGS
 #define INCLUDE_GOOGLE_TENSOR_RUNTIME_FLAGS
@@ -86,7 +87,7 @@ Expected<Environment> GetEnvironment() {
 
 Expected<Options> GetOptions() {
   LITERT_ASSIGN_OR_RETURN(auto options, Options::Create());
-  options.SetHardwareAccelerators(kLiteRtHwAcceleratorCpu);
+  options.SetHardwareAccelerators(HwAccelerators::kCpu);
   if (auto qnn_opts = QualcommOptionsFromFlags()) {
     options.AddOpaqueOptions(std::move(*qnn_opts));
   }
@@ -547,8 +548,16 @@ Expected<void> RunModel() {
                                 input_scale));
   LITERT_ASSIGN_OR_RETURN(
       auto npu_input_buffers,
-      CreateAndFillInputBuffers(compiled_model_npu, signature_index,
-                                input_scale));
+      compiled_model_npu.CreateInputBuffers(signature_index));
+  // Copy input buffers from CPU to NPU.
+  for (size_t i = 0; i < cpu_input_buffers.size(); ++i) {
+    LITERT_ASSIGN_OR_RETURN(size_t buffer_size, cpu_input_buffers[i].Size());
+    std::vector<char> data(buffer_size);
+    LITERT_RETURN_IF_ERROR(
+        cpu_input_buffers[i].Read<char>(absl::MakeSpan(data)));
+    LITERT_RETURN_IF_ERROR(
+        npu_input_buffers[i].Write<char>(absl::MakeSpan(data)));
+  }
 
   // Create output buffers
   LITERT_ASSIGN_OR_RETURN(

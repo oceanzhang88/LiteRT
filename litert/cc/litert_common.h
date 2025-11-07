@@ -73,6 +73,9 @@ struct HwAcceleratorSet {
   int value;
 
   explicit HwAcceleratorSet(int val) : value(val) {}
+
+  explicit HwAcceleratorSet(HwAccelerators val)
+      : value(static_cast<int>(val)) {}
 };
 
 inline HwAcceleratorSet operator|(HwAccelerators lhs, HwAccelerators rhs) {
@@ -89,6 +92,11 @@ inline int operator&(HwAccelerators lhs, HwAccelerators rhs) {
 
 inline int operator&(HwAcceleratorSet lhs, HwAccelerators rhs) {
   return lhs.value & static_cast<int>(rhs);
+}
+
+inline HwAcceleratorSet& operator|=(HwAcceleratorSet& lhs, HwAccelerators rhs) {
+  lhs.value |= static_cast<int>(rhs);
+  return lhs;
 }
 
 }  // namespace litert
