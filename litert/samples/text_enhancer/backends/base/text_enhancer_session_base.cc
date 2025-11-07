@@ -1,57 +1,67 @@
-#include "text_enhancer_session_base.h"
-
 #include <string>
+
+#include "text_enhancer_session_base.h"
 
 /**
  * @brief Base implementation for TextEnhancer_Initialize.
  * (This is a C++ helper function, so it's NOT in extern "C")
  */
-TextEnhancerSession* TextEnhancer_Initialize_Base(const TextEnhancerOptions& options,
-                                                  litert::Options litert_options,
-                                                  std::unique_ptr<litert::Environment> env) {
+TextEnhancerSession* TextEnhancer_Initialize_Base(
+    const TextEnhancerOptions& options, litert::Options litert_options,
+    std::unique_ptr<litert::Environment> env) {
     auto session = std::make_unique<TextEnhancerSession>();
 
     session->original_input_width = options.input_width;
     session->original_input_height = options.input_height;
-    if (session->original_input_width == 0 || session->original_input_height == 0) {
+    if (session->original_input_width == 0 ||
+        session->original_input_height == 0) {
         LOG(ERROR) << "Error: input_width and input_height must be set in "
                       "TextEnhancerOptions.";
         return nullptr;
     }
 
-    if (options.compute_shader_path && std::string(options.compute_shader_path) != "") {
-        session->preprocessor_type = TextEnhancerSession::PreprocessorType::kVulkan;
+    if (options.compute_shader_path &&
+        std::string(options.compute_shader_path) != "") {
+        session->preprocessor_type =
+            TextEnhancerSession::PreprocessorType::kVulkan;
     } else {
         session->preprocessor_type = TextEnhancerSession::PreprocessorType::kCpu;
     }
 
     session->env = std::move(env);
 
-    LITERT_ASSIGN_OR_ABORT(auto model, litert::Model::CreateFromFile(options.model_path));
+    LITERT_ASSIGN_OR_ABORT(auto model,
+                           litert::Model::CreateFromFile(options.model_path));
 
-    LITERT_ASSIGN_OR_ABORT(auto input_tensor_type, model.GetInputTensorType(0, 0));
+    LITERT_ASSIGN_OR_ABORT(auto input_tensor_type,
+                           model.GetInputTensorType(0, 0));
     session->model_input_height = input_tensor_type.Layout().Dimensions()[1];
     session->model_input_width = input_tensor_type.Layout().Dimensions()[2];
     session->model_input_channels = input_tensor_type.Layout().Dimensions()[3];
 
-    LITERT_ASSIGN_OR_ABORT(auto output_tensor_type, model.GetOutputTensorType(0, 0));
+    LITERT_ASSIGN_OR_ABORT(auto output_tensor_type,
+                           model.GetOutputTensorType(0, 0));
     session->model_output_height = output_tensor_type.Layout().Dimensions()[1];
     session->model_output_width = output_tensor_type.Layout().Dimensions()[2];
     session->model_output_channels = output_tensor_type.Layout().Dimensions()[3];
 
-    LOG(INFO) << "[Debug TextEnhancer_Initialize] Model Input: " << session->model_input_width
-              << "x" << session->model_input_height << "x" << session->model_input_channels;
+    LOG(INFO) << "[Debug TextEnhancer_Initialize] Model Input: "
+              << session->model_input_width << "x"
+              << session->model_input_height << "x"
+              << session->model_input_channels;
 
-    session->preprocessed_data.resize(session->model_input_width * session->model_input_height *
+    session->preprocessed_data.resize(session->model_input_width *
+                                      session->model_input_height *
                                       session->model_input_channels);
 
-    if (session->preprocessor_type == TextEnhancerSession::PreprocessorType::kVulkan) {
+    if (session->preprocessor_type ==
+        TextEnhancerSession::PreprocessorType::kVulkan) {
         LOG(INFO) << "Initializing Vulkan Pre-processor...";
         session->vulkan_processor = std::make_unique<VulkanImageProcessor>();
 
         if (!session->vulkan_processor->Initialize(options.compute_shader_path,
-                                                   session->model_input_width,
-                                                   session->model_input_height)) {
+                                                  session->model_input_width,
+                                                  session->model_input_height)) {
             LOG(ERROR) << "Failed to initialize VulkanImageProcessor.";
             return nullptr;
         }
@@ -74,16 +84,22 @@ TextEnhancerSession* TextEnhancer_Initialize_Base(const TextEnhancerOptions& opt
 
     LITERT_ASSIGN_OR_ABORT(
         auto compiled_model,
-        litert::CompiledModel::Create(*session->env, *session->model, litert_options));
-    session->compiled_model = std::make_unique<litert::CompiledModel>(std::move(compiled_model));
+        litert::CompiledModel::Create(*session->env, *session->model,
+                                      litert_options));
+    session->compiled_model =
+        std::make_unique<litert::CompiledModel>(std::move(compiled_model));
 
-    LITERT_ASSIGN_OR_ABORT(auto input_buffers, session->compiled_model->CreateInputBuffers());
+    LITERT_ASSIGN_OR_ABORT(auto input_buffers,
+                           session->compiled_model->CreateInputBuffers());
     session->input_buffers =
-        std::make_unique<std::vector<litert::TensorBuffer>>(std::move(input_buffers));
+        std::make_unique<std::vector<litert::TensorBuffer>>(
+            std::move(input_buffers));
 
-    LITERT_ASSIGN_OR_ABORT(auto output_buffers, session->compiled_model->CreateOutputBuffers());
+    LITERT_ASSIGN_OR_ABORT(auto output_buffers,
+                           session->compiled_model->CreateOutputBuffers());
     session->output_buffers =
-        std::make_unique<std::vector<litert::TensorBuffer>>(std::move(output_buffers));
+        std::make_unique<std::vector<litert::TensorBuffer>>(
+            std::move(output_buffers));
 
     return session.release();
 }
@@ -92,8 +108,9 @@ TextEnhancerSession* TextEnhancer_Initialize_Base(const TextEnhancerOptions& opt
  * @brief Base implementation for TextEnhancer_Run.
  * (This is a C++ helper function, so it's NOT in extern "C")
  */
-TextEnhancerStatus TextEnhancer_Run_Base(TextEnhancerSession* session, float* inference_time_ms,
-                                         std::function<litert::Expected<void>()> run_fn) {
+TextEnhancerStatus TextEnhancer_Run_Base(
+    TextEnhancerSession* session, float* inference_time_ms,
+    std::function<litert::Expected<void>()> run_fn) {
     if (!session) return kTextEnhancerInputError;
 
     LITERT_ASSIGN_OR_ABORT(auto profiler, session->compiled_model->GetProfiler());
@@ -104,7 +121,8 @@ TextEnhancerStatus TextEnhancer_Run_Base(TextEnhancerSession* session, float* in
     // --- Run inference (via backend-specific lambda) ---
     auto run_status = run_fn();
     if (!run_status) {
-        LOG(ERROR) << "CompiledModel::Run/RunAsync failed: " << run_status.Error().Message();
+        LOG(ERROR) << "CompiledModel::Run/RunAsync failed: "
+                   << run_status.Error().Message();
         return kTextEnhancerRuntimeError;
     }
 
@@ -117,7 +135,8 @@ TextEnhancerStatus TextEnhancer_Run_Base(TextEnhancerSession* session, float* in
         int event_index = 0;
 
         for (const auto& event : events) {
-            if (std::string(event.tag) == "Invoke" && event.start_timestamp_us > 0) {
+            if (std::string(event.tag) == "Invoke" &&
+                event.start_timestamp_us > 0) {
                 total_invoke_ms = event.elapsed_time_us / 1000.0;
                 break;
             }
@@ -128,8 +147,8 @@ TextEnhancerStatus TextEnhancer_Run_Base(TextEnhancerSession* session, float* in
             std::string tag(event.tag);
             double event_ms = event.elapsed_time_us / 1000.0;
 
-            LOG(INFO) << "  Event " << event_index << ": [" << tag << "], Time: " << event_ms
-                      << " ms";
+            LOG(INFO) << "  Event " << event_index << ": [" << tag
+                      << "], Time: " << event_ms << " ms";
             total_child_event_ms += event_ms;
             event_index++;
         }
@@ -139,9 +158,10 @@ TextEnhancerStatus TextEnhancer_Run_Base(TextEnhancerSession* session, float* in
             *inference_time_ms = total_invoke_ms;
         }
 
-        LOG(INFO) << "Total Child Event Time (Sum of Layers/Ops): " << total_child_event_ms
-                  << " ms";
-        LOG(INFO) << "Total 'Invoke' Time (Includes Overhead): " << total_invoke_ms << " ms";
+        LOG(INFO) << "Total Child Event Time (Sum of Layers/Ops): "
+                  << total_child_event_ms << " ms";
+        LOG(INFO) << "Total 'Invoke' Time (Includes Overhead): "
+                  << total_invoke_ms << " ms";
 
         profiler.Reset();
     } else if (inference_time_ms) {
@@ -151,6 +171,7 @@ TextEnhancerStatus TextEnhancer_Run_Base(TextEnhancerSession* session, float* in
 
     return kTextEnhancerOk;
 }
+
 
 // --- C API Implementation ---
 // (These are the common C API functions, so they ARE in extern "C")
@@ -168,12 +189,14 @@ void TextEnhancer_Shutdown(TextEnhancerSession* session) {
 /**
  * @brief Pre-processes a raw CPU buffer. (Common)
  */
-TextEnhancerStatus TextEnhancer_PreProcess(TextEnhancerSession* session, const uint8_t* rgb_data) {
+TextEnhancerStatus TextEnhancer_PreProcess(TextEnhancerSession* session,
+                                           const uint8_t* rgb_data) {
     if (!session || !rgb_data) return kTextEnhancerInputError;
 
     const int kInputChannels = 4;
 
-    if (session->preprocessor_type == TextEnhancerSession::PreprocessorType::kVulkan) {
+    if (session->preprocessor_type ==
+        TextEnhancerSession::PreprocessorType::kVulkan) {
         if (!session->vulkan_processor) {
             LOG(ERROR) << "Vulkan preprocessor not initialized.";
             return kTextEnhancerFailed;
@@ -181,8 +204,8 @@ TextEnhancerStatus TextEnhancer_PreProcess(TextEnhancerSession* session, const u
         auto vk_processor = session->vulkan_processor.get();
 
         float* vulkan_output_ptr = nullptr;
-        bool needs_conversion =
-            (session->model_input_channels == 3 && session->vulkan_temp_buffer.size() > 0);
+        bool needs_conversion = (session->model_input_channels == 3 &&
+                                 session->vulkan_temp_buffer.size() > 0);
 
         if (needs_conversion) {
             vulkan_output_ptr = session->vulkan_temp_buffer.data();
@@ -191,8 +214,8 @@ TextEnhancerStatus TextEnhancer_PreProcess(TextEnhancerSession* session, const u
         }
 
         if (!vk_processor->PreprocessImage(rgb_data, session->original_input_width,
-                                           session->original_input_height, kInputChannels,
-                                           vulkan_output_ptr)) {
+                                           session->original_input_height,
+                                           kInputChannels, vulkan_output_ptr)) {
             LOG(ERROR) << "VulkanImageProcessor::PreprocessImage failed.";
             return kTextEnhancerRuntimeError;
         }
@@ -211,18 +234,21 @@ TextEnhancerStatus TextEnhancer_PreProcess(TextEnhancerSession* session, const u
 
     } else {
         // --- CPU Pre-processing ---
-        LOG(INFO) << "[Debug TextEnhancer_PreProcess] Using CPU Pre-processor "
-                     "(ResizeImageBilinear).";
+        LOG(INFO)
+            << "[Debug TextEnhancer_PreProcess] Using CPU Pre-processor "
+               "(ResizeImageBilinear).";
         ImageUtils::ResizeImageBilinear(
-            rgb_data, session->original_input_width, session->original_input_height, kInputChannels,
+            rgb_data, session->original_input_width,
+            session->original_input_height, kInputChannels,
             session->preprocessed_data.data(), session->model_input_width,
             session->model_input_height, session->model_input_channels);
     }
 
-    auto status =
-        (*session->input_buffers)[0].Write(absl::MakeConstSpan(session->preprocessed_data));
+    auto status = (*session->input_buffers)[0].Write(
+        absl::MakeConstSpan(session->preprocessed_data));
     if (!status) {
-        LOG(ERROR) << "Failed to write to input buffer: " << status.Error().Message();
+        LOG(ERROR) << "Failed to write to input buffer: "
+                   << status.Error().Message();
         return kTextEnhancerRuntimeError;
     }
 
@@ -237,9 +263,11 @@ TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
                                                AHardwareBuffer* in_buffer) {
     if (!session || !in_buffer) return kTextEnhancerInputError;
 
-    if (session->preprocessor_type != TextEnhancerSession::PreprocessorType::kVulkan) {
-        LOG(ERROR) << "AHardwareBuffer input is only supported with the Vulkan "
-                      "preprocessor.";
+    if (session->preprocessor_type !=
+        TextEnhancerSession::PreprocessorType::kVulkan) {
+        LOG(ERROR)
+            << "AHardwareBuffer input is only supported with the Vulkan "
+               "preprocessor.";
         return kTextEnhancerInputError;
     }
     if (!session->vulkan_processor) {
@@ -250,8 +278,8 @@ TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
     auto vk_processor = session->vulkan_processor.get();
 
     float* vulkan_output_ptr = nullptr;
-    bool needs_conversion =
-        (session->model_input_channels == 3 && session->vulkan_temp_buffer.size() > 0);
+    bool needs_conversion = (session->model_input_channels == 3 &&
+                             session->vulkan_temp_buffer.size() > 0);
 
     if (needs_conversion) {
         vulkan_output_ptr = session->vulkan_temp_buffer.data();
@@ -260,7 +288,8 @@ TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
     }
 
     if (!vk_processor->PreprocessImage(in_buffer, session->original_input_width,
-                                       session->original_input_height, vulkan_output_ptr)) {
+                                       session->original_input_height,
+                                       vulkan_output_ptr)) {
         LOG(ERROR) << "VulkanImageProcessor::PreprocessImage (AHB) failed.";
         return kTextEnhancerRuntimeError;
     }
@@ -268,16 +297,20 @@ TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
     if (needs_conversion) {
         int num_pixels = session->model_input_width * session->model_input_height;
         for (int i = 0; i < num_pixels; ++i) {
-            session->preprocessed_data[i * 3 + 0] = session->vulkan_temp_buffer[i * 4 + 0];  // R
-            session->preprocessed_data[i * 3 + 1] = session->vulkan_temp_buffer[i * 4 + 1];  // G
-            session->preprocessed_data[i * 3 + 2] = session->vulkan_temp_buffer[i * 4 + 2];  // B
+            session->preprocessed_data[i * 3 + 0] =
+                session->vulkan_temp_buffer[i * 4 + 0];  // R
+            session->preprocessed_data[i * 3 + 1] =
+                session->vulkan_temp_buffer[i * 4 + 1];  // G
+            session->preprocessed_data[i * 3 + 2] =
+                session->vulkan_temp_buffer[i * 4 + 2];  // B
         }
     }
 
-    auto status =
-        (*session->input_buffers)[0].Write(absl::MakeConstSpan(session->preprocessed_data));
+    auto status = (*session->input_buffers)[0].Write(
+        absl::MakeConstSpan(session->preprocessed_data));
     if (!status) {
-        LOG(ERROR) << "Failed to write to input buffer: " << status.Error().Message();
+        LOG(ERROR) << "Failed to write to input buffer: "
+                   << status.Error().Message();
         return kTextEnhancerRuntimeError;
     }
 
@@ -288,11 +321,13 @@ TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
 /**
  * @brief Gets the preprocessed data buffer. (Common)
  */
-TextEnhancerStatus TextEnhancer_GetPreprocessedData(TextEnhancerSession* session, uint8_t** data) {
+TextEnhancerStatus TextEnhancer_GetPreprocessedData(TextEnhancerSession* session,
+                                                    uint8_t** data) {
     if (!session || !data) return kTextEnhancerInputError;
 
     if (session->preprocessed_data.empty()) {
-        LOG(ERROR) << "Preprocessed data is empty. Call TextEnhancer_PreProcess first.";
+        LOG(ERROR)
+            << "Preprocessed data is empty. Call TextEnhancer_PreProcess first.";
         return kTextEnhancerFailed;
     }
 
@@ -309,17 +344,21 @@ TextEnhancerStatus TextEnhancer_PostProcess(TextEnhancerSession* session,
     if (!session) return kTextEnhancerInputError;
 
     if ((*session->output_buffers)[0].HasEvent()) {
-        LITERT_ASSIGN_OR_ABORT(auto event, (*session->output_buffers)[0].GetEvent());
+        LITERT_ASSIGN_OR_ABORT(auto event,
+                               (*session->output_buffers)[0].GetEvent());
         event.Wait();
     }
 
-    size_t output_size =
-        session->model_output_width * session->model_output_height * session->model_output_channels;
+    size_t output_size = session->model_output_width *
+                         session->model_output_height *
+                         session->model_output_channels;
 
     std::vector<float> output_vec(output_size);
-    auto read_status = (*session->output_buffers)[0].Read(absl::MakeSpan(output_vec));
+    auto read_status =
+        (*session->output_buffers)[0].Read(absl::MakeSpan(output_vec));
     if (!read_status) {
-        LOG(ERROR) << "Failed to read output buffer: " << read_status.Error().Message();
+        LOG(ERROR) << "Failed to read output buffer: "
+                   << read_status.Error().Message();
         return kTextEnhancerRuntimeError;
     }
 

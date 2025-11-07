@@ -205,7 +205,11 @@ LIB_NAME_ON_DEVICE=$(basename "$LIB_REL_PATH")
 RUNTIME_LIB_NAME_ON_DEVICE=$(basename "$RUNTIME_LIB_REL_PATH")
 IMAGE_BASENAME=$(basename "$IMAGE_REL_PATH")
 
-OUTPUT_IMAGE="output_image.png"
+# --- MODIFIED: Base output name and directory for 10-run test ---
+OUTPUT_IMAGE_BASENAME="output"
+OUTPUT_RUN_DIR_ON_DEVICE="output_run_images"
+# --- End Modification ---
+
 OUTPUT_PREPROCESSED_IMAGE="preprocessed_output.png"
 
 
@@ -270,9 +274,12 @@ fi
 adb shell "chmod +x $TARGET_DIR/$EXECUTABLE_NAME_ON_DEVICE"
 echo "Set execute permissions on device."
 
+# --- MODIFIED: Cleanup for 10-run test ---
 echo "Cleaning up previous run results"
-adb shell "rm -f $TARGET_DIR/$OUTPUT_IMAGE"
+adb shell "rm -f $TARGET_DIR/$OUTPUT_IMAGE_BASENAME.png" # Old single file
 adb shell "rm -f $TARGET_DIR/$OUTPUT_PREPROCESSED_IMAGE"
+adb shell "rm -rf $TARGET_DIR/$OUTPUT_RUN_DIR_ON_DEVICE" # New directory
+# --- End Modification ---
 
 
 # --- Prepare Run Command ---
@@ -287,20 +294,18 @@ if [ "$SAVE_PREPROCESSED" = true ]; then
     SAVE_PREPROCESSED_FLAG="--save_preprocessed=true"
 fi
 
+# --- MODIFIED: The 5th argument is now a "base name" for the 10 outputs ---
 RUN_COMMAND="./$EXECUTABLE_NAME_ON_DEVICE \
      ./$LIB_NAME_ON_DEVICE \
      ./models/$MODEL_BASENAME \
      ./test_images/$IMAGE_BASENAME \
-     ./$OUTPUT_IMAGE \
+     ./$OUTPUT_IMAGE_BASENAME \
      $PREPROCESSOR_FLAG \
      $SHADER_FLAG \
      $SAVE_PREPROCESSED_FLAG \
      --platform=android \
      "
-
-# 
-
-
+# --- End Modification ---
 
 if [[ "$ACCELERATOR_NAME" == "npu" ]]; then
     FULL_COMMAND="cd $TARGET_DIR && LD_LIBRARY_PATH=\"$LD_PATH\" ADSP_LIBRARY_PATH=\"$ADSP_LIBRARY_PATH_ON_DEVICE\" $RUN_COMMAND"
@@ -316,16 +321,27 @@ echo "  adb shell \"$FULL_COMMAND\""
 # --- Execute the command ---
 adb shell "$FULL_COMMAND"
 
-# --- Pull Results ---
+# --- MODIFIED: Pull Results ---
 echo ""
-echo "To pull the result:"
-OUTPUT_PULL_NAME="output_image_${ACCELERATOR_NAME}_${PREPROCESSOR_TYPE}_${PHONE_MODEL}.png"
-echo "  adb pull $TARGET_DIR/$OUTPUT_IMAGE ./$OUTPUT_PULL_NAME"
-adb pull "$TARGET_DIR/$OUTPUT_IMAGE" "./$OUTPUT_PULL_NAME"
+echo "Pulling results from 10-run benchmark..."
+
+# Define a local directory to pull results into
+LOCAL_OUTPUT_DIR="android_output_${ACCELERATOR_NAME}_${PREPROCESSOR_TYPE}_${PHONE_MODEL}"
+mkdir -p "./$LOCAL_OUTPUT_DIR"
+
+echo "Pulling 10 run output images from $TARGET_DIR/$OUTPUT_RUN_DIR_ON_DEVICE to ./$LOCAL_OUTPUT_DIR/"
+
+# Pull just the *contents* of the remote dir into our new local dir
+# Using "/." at the end of the remote path pulls the contents, not the directory itself
+adb pull "$TARGET_DIR/$OUTPUT_RUN_DIR_ON_DEVICE/." "./$LOCAL_OUTPUT_DIR/"
+
+echo "Pulled run images."
 
 if [ "$SAVE_PREPROCESSED" = true ]; then
     echo "Pulling preprocessed_output.png from device..."
-    adb pull "$TARGET_DIR/$OUTPUT_PREPROCESSED_IMAGE" "./preprocessed_output.png"
+    # Pull the preprocessed image into the same results directory for tidiness
+    adb pull "$TARGET_DIR/$OUTPUT_PREPROCESSED_IMAGE" "./$LOCAL_OUTPUT_DIR/preprocessed_output.png"
 fi
 
-echo "Done."
+echo "Done. Results are in ./$LOCAL_OUTPUT_DIR/"
+# --- End Modification ---
