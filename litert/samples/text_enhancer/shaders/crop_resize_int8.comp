@@ -1,0 +1,76 @@
+#version 450
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// Input: Storage Image
+layout (binding = 0, rgba8) uniform readonly image2D u_InputTexture;
+
+// Output: Storage Buffer (for packed uint32_t)
+// We will write one uint per pixel, which C++ will read as 4 x 8-bit chars.
+layout(std430, binding = 1) buffer OutputBuffer {
+    uint data[]; // <-- THE FIX IS HERE
+} out_buffer;
+
+
+// Push constants
+layout(push_constant) uniform PushConstants {
+    ivec2 in_dims;
+    ivec2 crop_dims;
+    ivec2 out_dims;
+} pc;
+
+// ... (textureBilinear function is identical to the float version) ...
+vec4 textureBilinear(vec2 uv) {
+    vec2 texel_pos = uv * vec2(pc.in_dims) - 0.5;
+    vec2 floor_pos = floor(texel_pos);
+    vec2 fract_pos = texel_pos - floor_pos;
+    ivec2 p00 = ivec2(floor_pos);
+    ivec2 p10 = p00 + ivec2(1, 0);
+    ivec2 p01 = p00 + ivec2(0, 1);
+    ivec2 p11 = p00 + ivec2(1, 1);
+    p00 = clamp(p00, ivec2(0), pc.in_dims - 1);
+    p10 = clamp(p10, ivec2(0), pc.in_dims - 1);
+    p01 = clamp(p01, ivec2(0), pc.in_dims - 1);
+    p11 = clamp(p11, ivec2(0), pc.in_dims - 1);
+    vec4 v00 = imageLoad(u_InputTexture, p00);
+    vec4 v10 = imageLoad(u_InputTexture, p10);
+    vec4 v01 = imageLoad(u_InputTexture, p01);
+    vec4 v11 = imageLoad(u_InputTexture, p11);
+    vec4 interp_x0 = mix(v00, v10, fract_pos.x);
+    vec4 interp_x1 = mix(v01, v11, fract_pos.y);
+    return mix(interp_x0, interp_x1, fract_pos.y);
+}
+
+
+void main() {
+    ivec2 out_coord = ivec2(gl_GlobalInvocationID.xy);
+    if (out_coord.x >= pc.out_dims.x || out_coord.y >= pc.out_dims.y) {
+        return;
+    }
+
+    // --- CROP & RESIZE LOGIC ---
+    ivec2 crop_offset = (pc.in_dims - pc.crop_dims) / 2;
+    vec2 scale = vec2(pc.crop_dims - 1) / vec2(pc.out_dims - 1);
+    vec2 crop_coord = vec2(out_coord) * scale;
+    vec2 in_coord = crop_coord + vec2(crop_offset);
+    vec2 uv = in_coord / vec2(pc.in_dims);
+    
+    // --- SAMPLING ---
+    vec4 color = textureBilinear(uv); // color is [0.0, 1.0]
+
+    // --- WRITE TO BUFFER ---
+
+    // 1. Convert [0.0, 1.0] float to [0, 255] integer
+    uint r = uint(clamp(color.r * 255.0, 0.0, 255.0));
+    uint g = uint(clamp(color.g * 255.0, 0.0, 255.0));
+    uint b = uint(clamp(color.b * 255.0, 0.0, 255.0));
+    uint a = 255; // Set alpha to 255 (opaque)
+
+    // 2. Pack into a single uint32_t (RGBA8888 in little-endian)
+    uint packed_color = (a << 24) | (b << 16) | (g << 8) | r;
+
+    // 3. Calculate the 1D pixel index using your 'pc' struct
+    uint pixel_index = uint(out_coord.y * pc.out_dims.x + out_coord.x);
+
+    // 4. Write the packed uint32_t. This is now a valid uint-to-uint assignment.
+    out_buffer.data[pixel_index] = packed_color;
+}

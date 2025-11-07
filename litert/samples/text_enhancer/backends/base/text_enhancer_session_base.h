@@ -50,7 +50,6 @@ struct TextEnhancerSession {
     // --- Pre-processing resources ---
     std::unique_ptr<VulkanImageProcessor> vulkan_processor;
     std::vector<float> preprocessed_data;
-    std::vector<float> vulkan_temp_buffer;
 };
 
 /**

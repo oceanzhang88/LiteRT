@@ -1,11 +1,10 @@
-#include <string>
-
 #include "text_enhancer_session_base.h"
+
+#include <string>
 
 #include "litert/cc/litert_macros.h"
 #include "litert/cc/litert_profiler.h"
 #include "litert/cc/options/litert_runtime_options.h"
-
 #include "litert/samples/text_enhancer/utils/image_utils.h"
 
 #ifdef __ANDROID__
@@ -59,18 +58,11 @@ TextEnhancerSession* TextEnhancer_Initialize_Base(const TextEnhancerOptions& opt
         LOG(INFO) << "Initializing Vulkan Pre-processor...";
         session->vulkan_processor = std::make_unique<VulkanImageProcessor>();
 
-        if (!session->vulkan_processor->Initialize(options.compute_shader_path,
-                                                   session->model_input_width,
-                                                   session->model_input_height)) {
+        if (!session->vulkan_processor->Initialize(
+                options.compute_shader_path, session->model_input_width,
+                session->model_input_height, options.use_int8_preprocessor)) {
             LOG(ERROR) << "Failed to initialize VulkanImageProcessor.";
             return nullptr;
-        }
-
-        if (session->model_input_channels == 3) {
-            LOG(INFO) << "[Debug TextEnhancer_Initialize] Model needs 3ch, Vulkan "
-                         "outputs 4ch. Creating 4ch temp buffer.";
-            session->vulkan_temp_buffer.resize(session->model_input_width *
-                                               session->model_input_height * 4);
         }
     } else {
         LOG(INFO) << "Using CPU Pre-processor.";
@@ -190,33 +182,13 @@ TextEnhancerStatus TextEnhancer_PreProcess(TextEnhancerSession* session, const u
         }
         auto vk_processor = session->vulkan_processor.get();
 
-        float* vulkan_output_ptr = nullptr;
-        bool needs_conversion =
-            (session->model_input_channels == 3 && session->vulkan_temp_buffer.size() > 0);
-
-        if (needs_conversion) {
-            vulkan_output_ptr = session->vulkan_temp_buffer.data();
-        } else {
-            vulkan_output_ptr = session->preprocessed_data.data();
-        }
-
+        float* vulkan_output_ptr = session->preprocessed_data.data();
+    
         if (!vk_processor->PreprocessImage(rgb_data, session->original_input_width,
                                            session->original_input_height, kInputChannels,
                                            vulkan_output_ptr)) {
             LOG(ERROR) << "VulkanImageProcessor::PreprocessImage failed.";
             return kTextEnhancerRuntimeError;
-        }
-
-        if (needs_conversion) {
-            int num_pixels = session->model_input_width * session->model_input_height;
-            for (int i = 0; i < num_pixels; ++i) {
-                session->preprocessed_data[i * 3 + 0] =
-                    session->vulkan_temp_buffer[i * 4 + 0];  // R
-                session->preprocessed_data[i * 3 + 1] =
-                    session->vulkan_temp_buffer[i * 4 + 1];  // G
-                session->preprocessed_data[i * 3 + 2] =
-                    session->vulkan_temp_buffer[i * 4 + 2];  // B
-            }
         }
 
     } else {
@@ -259,29 +231,14 @@ TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
 
     auto vk_processor = session->vulkan_processor.get();
 
-    float* vulkan_output_ptr = nullptr;
-    bool needs_conversion =
-        (session->model_input_channels == 3 && session->vulkan_temp_buffer.size() > 0);
-
-    if (needs_conversion) {
-        vulkan_output_ptr = session->vulkan_temp_buffer.data();
-    } else {
-        vulkan_output_ptr = session->preprocessed_data.data();
-    }
+    // --- NO TEMP BUFFER NEEDED ---
+    // We write *directly* into the final 3-channel buffer
+    float* vulkan_output_ptr = session->preprocessed_data.data();
 
     if (!vk_processor->PreprocessImage(in_buffer, session->original_input_width,
                                        session->original_input_height, vulkan_output_ptr)) {
         LOG(ERROR) << "VulkanImageProcessor::PreprocessImage (AHB) failed.";
         return kTextEnhancerRuntimeError;
-    }
-
-    if (needs_conversion) {
-        int num_pixels = session->model_input_width * session->model_input_height;
-        for (int i = 0; i < num_pixels; ++i) {
-            session->preprocessed_data[i * 3 + 0] = session->vulkan_temp_buffer[i * 4 + 0];  // R
-            session->preprocessed_data[i * 3 + 1] = session->vulkan_temp_buffer[i * 4 + 1];  // G
-            session->preprocessed_data[i * 3 + 2] = session->vulkan_temp_buffer[i * 4 + 2];  // B
-        }
     }
 
     auto status =

@@ -15,15 +15,21 @@
 #   OPTIONS:
 #     --accelerator=cpu|gpu|npu  (Default: cpu)
 #     --preprocessor=cpu|vulkan  (Default: cpu)
+#     --datatype=float|int8      (Default: float. Selects Vulkan shader to use)
 #     --save_preprocessed        (Default: false)
 #     --phone=s25|s23            (Default: s25. Used for NPU lib path & model)
 #
 
 set -e
 
+# --- FIX: Get the script's own directory to build robust paths ---
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+# --- End Fix ---
+
 # --- Default Values ---
 ACCELERATOR_NAME="cpu"
 PREPROCESSOR_TYPE="cpu"
+DATA_TYPE="float"
 SAVE_PREPROCESSED=false
 PHONE_MODEL="s25"
 HOST_NPU_LIB=""
@@ -32,13 +38,14 @@ POSITIONAL_ARGS=() # Array to hold non-option arguments
 
 # --- Helper Function ---
 show_help() {
-    echo "Usage: ./deploy_and_run_on_android.sh [OPTIONS] <bazel_bin_path>"
+    echo "Usage: $0 [OPTIONS] <bazel_bin_path>" # Changed to $0
     echo ""
     echo "Deploys and runs the Text Enhancer sample on a connected Android device."
     echo ""
     echo "Options:"
     echo "  --accelerator=cpu|gpu|npu  (Default: cpu)"
     echo "  --preprocessor=cpu|vulkan  (Default: cpu)"
+    echo "  --datatype=float|int8      (Default: float. Selects Vulkan shader to use)"
     echo "  --save_preprocessed        (Default: false)"
     echo "  --phone=s25|vst            (Default: s25. Used for NPU lib path & model)"
     echo "  --host_npu_lib=<path>          (Optional. Overrides default QNN host lib path)"
@@ -67,6 +74,15 @@ while [[ $# -gt 0 ]]; do
         ;;
         --preprocessor=*)
         PREPROCESSOR_TYPE="${1#*=}"
+        shift
+        ;;
+        --datatype=*)
+        DATA_TYPE="${1#*=}"
+        if [[ "$DATA_TYPE" != "float" && "$DATA_TYPE" != "int8" ]]; then
+            echo "Error: Invalid value for --datatype. Must be 'float' or 'int8'." >&2
+            show_help
+            exit 1
+        fi
         shift
         ;;
         --save_preprocessed)
@@ -121,8 +137,19 @@ fi
 
 echo "Selected Accelerator: $ACCELERATOR_NAME"
 echo "Selected Pre-processor: $PREPROCESSOR_TYPE"
+echo "Selected Data Type: $DATA_TYPE"
 echo "Save Preprocessed Image: $SAVE_PREPROCESSED"
 echo "Selected Phone Model: $PHONE_MODEL"
+echo "Script directory: $SCRIPT_DIR" # Added for debug
+
+# --- Define Shader Filename based on Data Type ---
+SHADER_BASENAME="crop_resize_float.spv" # Default
+if [ "$DATA_TYPE" == "int8" ]; then
+    SHADER_BASENAME="crop_resize_int8.spv"
+fi
+if [ "$PREPROCESSOR_TYPE" == "vulkan" ]; then
+    echo "Using Vulkan Shader: $SHADER_BASENAME"
+fi
 
 
 # --- NPU Configuration ---
@@ -172,17 +199,16 @@ EXECUTABLE_REL_PATH="litert/samples/text_enhancer/text_enhancer_standalone_${ACC
 LIB_REL_PATH="litert/samples/text_enhancer/text_enhancer_lib_${ACCELERATOR_NAME}.so"
 RUNTIME_LIB_REL_PATH="litert/c/libLiteRtRuntimeCApi.so"
 
-# Paths relative to project root (now inside text_enhancer)
-SHADER_REL_PATH="litert/samples/text_enhancer/shaders/crop_resize.spv"
-IMAGE_REL_PATH="litert/samples/text_enhancer/test_images/low_res_image.png"
-MODEL_DIR_REL_PATH="litert/samples/text_enhancer/models"
+# --- FIX: Paths are now absolute, based on SCRIPT_DIR ---
+SHADER_DIR_REL_PATH="$SCRIPT_DIR/shaders"
+IMAGE_REL_PATH="$SCRIPT_DIR/test_images/low_res_image.png"
+MODEL_DIR_REL_PATH="$SCRIPT_DIR/models"
+# --- End Fix ---
 
 # GPU-specific assets
-ROOT_DIR="litert/"
-PACKAGE_LOCATION="${ROOT_DIR}samples/text_enhancer"
-PACKAGE_NAME="text_enhancer_standalone_${ACCELERATOR_NAME}"
-HOST_GPU_LIBRARY_DIR="${PACKAGE_LOCATION}/libs"
-# HOST_GPU_LIBRARY_DIR="${BAZEL_BIN_PATH}/${PACKAGE_LOCATION}/${PACKAGE_NAME}.runfiles/litert_gpu/jni/arm64-v8a"
+# --- FIX: Path to libs is also relative to SCRIPT_DIR ---
+HOST_GPU_LIBRARY_DIR="$SCRIPT_DIR/libs"
+# --- End Fix ---
 
 # NPU-specific assets
 DEVICE_NPU_LIBRARY_DIR="${TARGET_DIR}/npu"
@@ -190,6 +216,11 @@ LD_LIBRARY_PATH_ON_DEVICE="${DEVICE_NPU_LIBRARY_DIR}/"
 ADSP_LIBRARY_PATH_ON_DEVICE="${DEVICE_NPU_LIBRARY_DIR}/"
 
 # Set NPU library paths on host
+# Note: These paths are relative to bazel-bin, so they are OK
+ROOT_DIR_FROM_BAZEL_BIN="litert"
+PACKAGE_LOCATION="${ROOT_DIR_FROM_BAZEL_BIN}/samples/text_enhancer"
+PACKAGE_NAME="text_enhancer_standalone_${ACCELERATOR_NAME}"
+
 if [[ -z "$HOST_NPU_LIB" ]]; then
     echo "Defaulting to QNN libraries path."
     HOST_NPU_LIB="${BAZEL_BIN_PATH}/${PACKAGE_LOCATION}/${PACKAGE_NAME}.runfiles/qairt/lib/"
@@ -226,14 +257,21 @@ echo "Created directories on device."
 adb push "$BAZEL_BIN_PATH/$EXECUTABLE_REL_PATH" "$TARGET_DIR/$EXECUTABLE_NAME_ON_DEVICE"
 echo "Pushed executable."
 
+# --- Modified Shader Pushing ---
 if [ "$PREPROCESSOR_TYPE" == "vulkan" ]; then
-    if [ -f "$SHADER_REL_PATH" ]; then
-        adb push "$SHADER_REL_PATH" "$TARGET_DIR/shaders/"
-        echo "Pushed Vulkan pre-processor shader (crop_resize.spv)."
+    # --- FIX: LOCAL_SHADER_PATH is now an absolute path ---
+    LOCAL_SHADER_PATH="$SHADER_DIR_REL_PATH/$SHADER_BASENAME"
+    # --- End Fix ---
+    if [ -f "$LOCAL_SHADER_PATH" ]; then
+        adb push "$LOCAL_SHADER_PATH" "$TARGET_DIR/shaders/"
+        echo "Pushed Vulkan pre-processor shader ($SHADER_BASENAME)."
     else
-        echo "Warning: Vulkan shader $SHADER_REL_PATH not found. Skipping."
+        echo "Error: Vulkan shader '$LOCAL_SHADER_PATH' not found." >&2
+        echo "Please ensure $SHADER_BASENAME exists in the $SHADER_DIR_REL_PATH directory." >&2
+        exit 1
     fi
 fi
+# --- End Modification ---
 
 adb push "$IMAGE_REL_PATH" "$TARGET_DIR/test_images/"
 echo "Pushed test images."
@@ -251,8 +289,15 @@ echo "Pushed project API library ($BAZEL_BIN_PATH/$LIB_REL_PATH)."
 LD_PATH="$TARGET_DIR" # Default path for CPU/GPU
 
 if [ "$ACCELERATOR_NAME" == "gpu" ]; then
-    adb push "$HOST_GPU_LIBRARY_DIR/libLiteRtOpenClAccelerator.so" "$TARGET_DIR/"
-    echo "Pushed GPU accelerator library."
+    # --- FIX: Check and push from the absolute path ---
+    if [ -f "$HOST_GPU_LIBRARY_DIR/libLiteRtOpenClAccelerator.so" ]; then
+        adb push "$HOST_GPU_LIBRARY_DIR/libLiteRtOpenClAccelerator.so" "$TARGET_DIR/"
+        echo "Pushed GPU accelerator library."
+    else
+        echo "Error: GPU accelerator lib not found at $HOST_GPU_LIBRARY_DIR/libLiteRtOpenClAccelerator.so" >&2
+        exit 1
+    fi
+    # --- End Fix ---
 fi
 
 if [ "$ACCELERATOR_NAME" == "npu" ]; then
@@ -284,10 +329,14 @@ adb shell "rm -rf $TARGET_DIR/$OUTPUT_RUN_DIR_ON_DEVICE" # New directory
 
 # --- Prepare Run Command ---
 PREPROCESSOR_FLAG="--preprocessor=$PREPROCESSOR_TYPE"
+
+# --- Modified Shader Flag ---
 SHADER_FLAG=""
 if [ "$PREPROCESSOR_TYPE" == "vulkan" ]; then
-    SHADER_FLAG="--shader_path=shaders/crop_resize.spv"
+    # Use the on-device path, which includes the shader basename
+    SHADER_FLAG="--shader_path=shaders/$SHADER_BASENAME"
 fi
+# --- End Modification ---
 
 SAVE_PREPROCESSED_FLAG=""
 if [ "$SAVE_PREPROCESSED" = true ]; then
@@ -326,7 +375,7 @@ echo ""
 echo "Pulling results from 10-run benchmark..."
 
 # Define a local directory to pull results into
-LOCAL_OUTPUT_DIR="android_output_${ACCELERATOR_NAME}_${PREPROCESSOR_TYPE}_${PHONE_MODEL}"
+LOCAL_OUTPUT_DIR="android_output_${ACCELERATOR_NAME}_${PREPROCESSOR_TYPE}_${DATA_TYPE}_${PHONE_MODEL}" # Added DATA_TYPE
 mkdir -p "./$LOCAL_OUTPUT_DIR"
 
 echo "Pulling 10 run output images from $TARGET_DIR/$OUTPUT_RUN_DIR_ON_DEVICE to ./$LOCAL_OUTPUT_DIR/"

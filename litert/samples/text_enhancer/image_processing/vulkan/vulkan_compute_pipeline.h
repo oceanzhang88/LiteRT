@@ -1,10 +1,12 @@
 #ifndef SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_COMPUTE_PIPELINE_H_
 #define SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_COMPUTE_PIPELINE_H_
 
-#include "vulkan_context.h"
+#include <vulkan/vulkan.h>
+
 #include <string>
 #include <vector>
-#include <vulkan/vulkan.h>
+
+#include "vulkan_context.h"
 
 // Define the push constant structure matching the shader
 struct CropResizePushConstants {
@@ -14,7 +16,7 @@ struct CropResizePushConstants {
 };
 
 class VulkanComputePipeline {
-public:
+   public:
     VulkanComputePipeline();
     ~VulkanComputePipeline();
 
@@ -28,11 +30,11 @@ public:
     VkPipelineLayout GetPipelineLayout() const { return pipeline_layout_; }
     VkDescriptorSetLayout GetDescriptorSetLayout() const { return descriptor_set_layout_; }
 
-private:
+   private:
     VkShaderModule createShaderModule(const std::vector<char>& code);
 
-    VulkanContext* context_ = nullptr; // Non-owning pointer
-    VkDevice device_ = VK_NULL_HANDLE; // Cached for convenience
+    VulkanContext* context_ = nullptr;  // Non-owning pointer
+    VkDevice device_ = VK_NULL_HANDLE;  // Cached for convenience
 
     // Compute pipeline resources
     VkPipeline compute_pipeline_ = VK_NULL_HANDLE;
@@ -41,4 +43,4 @@ private:
     VkShaderModule compute_shader_module_ = VK_NULL_HANDLE;
 };
 
-#endif // SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_COMPUTE_PIPELINE_H_
+#endif  // SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_COMPUTE_PIPELINE_H_

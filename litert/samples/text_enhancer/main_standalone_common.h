@@ -65,6 +65,7 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
         std::cerr << "Usage: " << argv[0] << " <lib_path.so> <model_path> <input_image> <output_image_base_path>"
                   << " [--preprocessor=cpu|vulkan]"
                   << " [--shader_path=path/to/shader]"
+                  << " [--datatype=float|int8]" // <-- MODIFIED: Added datatype
                   << " [--platform=desktop|android]"
                   << " [--save_preprocessed=true|false]" << std::endl;
         std::cerr << "Note: <output_image_base_path> will be used to generate output_run_images/basename_0.png, etc." << std::endl;
@@ -112,6 +113,10 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
     std::string save_preprocessed_str = GetFlagValue(argc, argv, "--save_preprocessed=", "false");
     bool save_preprocessed = (save_preprocessed_str == "true");
 
+    // --- ADDED: Parse datatype flag ---
+    std::string datatype_str = GetFlagValue(argc, argv, "--datatype=", "float");
+    // ---------------------------------
+
     std::string compute_shader_path_str = "";
     const char* compute_shader_path = "";
 
@@ -137,7 +142,10 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
     }
 
     if (preprocessor_type_str == "vulkan") {
-        compute_shader_path_str = GetFlagValue(argc, argv, "--shader_path=", "shaders/crop_resize.spv");
+        // --- MODIFIED: Default shader path is now based on datatype ---
+        std::string default_shader = (datatype_str == "int8") ? "shaders/crop_resize_int8.spv" : "shaders/crop_resize_float.spv";
+        compute_shader_path_str = GetFlagValue(argc, argv, "--shader_path=", default_shader);
+        // -----------------------------------------------------------
         compute_shader_path = compute_shader_path_str.c_str();
         std::cout << "[Debug main] compute_shader_path set to: '" << compute_shader_path << "'" << std::endl;
     } else {
@@ -164,6 +172,16 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
     options.accelerator_name = accelerator_name.c_str();  // --- MODIFIED ---
     options.input_width = img_width;
     options.input_height = img_height;
+
+    // --- ADDED: Set preprocessor type based on datatype flag ---
+    if (datatype_str == "int8") {
+        options.use_int8_preprocessor = true;
+        std::cout << "[Debug main] Setting preprocessor data type: INT8" << std::endl;
+    } else {
+        options.use_int8_preprocessor = false;
+        std::cout << "[Debug main] Setting preprocessor data type: FLOAT" << std::endl;
+    }
+    // ---------------------------------------------------------
 
     TextEnhancerSession* session = fn_TextEnhancer_Initialize(options);
     // ----------------------------

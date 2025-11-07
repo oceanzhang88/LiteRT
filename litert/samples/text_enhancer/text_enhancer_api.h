@@ -35,6 +35,7 @@ typedef struct {
     const char* accelerator_name;     // "cpu", "gpu", "npu", "dummy"
     int input_width;                  // Required input width
     int input_height;                 // Required input height
+    bool use_int8_preprocessor = false; // Default to float
 } TextEnhancerOptions;
 
 /**

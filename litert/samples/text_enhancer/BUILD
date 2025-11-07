@@ -21,8 +21,10 @@ filegroup(
     srcs = [
         "shaders/passthrough_shader.vert",
         "shaders/super_res_compute.glsl",
-        "shaders/crop_resize.comp",
-        "shaders/crop_resize.spv",
+        "shaders/crop_resize_float.comp",
+        "shaders/crop_resize_float.spv",
+        "shaders/crop_resize_int8.comp",
+        "shaders/crop_resize_int8.spv",
     ],
 )
 

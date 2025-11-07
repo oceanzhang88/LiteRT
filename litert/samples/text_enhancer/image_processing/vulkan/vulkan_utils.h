@@ -5,12 +5,10 @@
 #include <string>
 #include <vulkan/vulkan.h>
 
-// --- ADD THIS BLOCK ---
 #ifdef __ANDROID__
 #include <android/hardware_buffer.h>
-#include <vulkan/vulkan_android.h> // For PFN_vkGetAndroidHardwareBufferPropertiesANDROID
+#include <vulkan/vulkan_android.h> // For PFN types
 #endif
-// --- END OF BLOCK ---
 
 
 namespace VulkanUtils {
@@ -48,22 +46,23 @@ VkImageView CreateImageView(VkDevice device,
 
 VkSampler CreateSampler(VkDevice device);
 
-// --- ADD THIS BLOCK ---
 #ifdef __ANDROID__
 /**
  * @brief Imports an AHardwareBuffer into a new VkImage.
  * @return true on success, false on failure.
  */
+// --- FIX: Updated signature to 10 arguments ---
 bool ImportAhbToImage(VkDevice device,
                       VkPhysicalDevice physical_device,
                       AHardwareBuffer* hardware_buffer,
                       PFN_vkGetAndroidHardwareBufferPropertiesANDROID vkGetAndroidHardwareBufferPropertiesANDROID,
+                      PFN_vkGetMemoryAndroidHardwareBufferANDROID vkGetMemoryAndroidHardwareBufferANDROID,
+                      VkImageUsageFlags extra_usage_flags,
                       VkImage& out_image,
                       VkDeviceMemory& out_memory,
                       VkImageView& out_image_view,
                       VkFormat& out_format);
 #endif // __ANDROID__
-// --- END OF BLOCK ---
 
 
 // --- Command Helpers ---

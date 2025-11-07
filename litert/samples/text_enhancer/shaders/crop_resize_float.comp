@@ -1,0 +1,77 @@
+#version 450
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// Input: Storage Image
+layout (binding = 0, rgba8) uniform readonly image2D u_InputTexture;
+
+// Output: Storage Buffer (for vec4 floats)
+// layout(std430, binding = 1) buffer OutputBuffer {
+//     vec4 data[];
+// } u_OutputBuffer;
+
+// NEW WAY: Declare as a flat array of floats
+layout(std430, set = 0, binding = 1) buffer OutputBuffer {
+    float data[];
+} out_buffer;
+
+// Push constants
+layout(push_constant) uniform PushConstants {
+    ivec2 in_dims;
+    ivec2 crop_dims;
+    ivec2 out_dims;
+} pc;
+
+// Bilinear sampling
+vec4 textureBilinear(vec2 uv) {
+    vec2 texel_pos = uv * vec2(pc.in_dims) - 0.5;
+    vec2 floor_pos = floor(texel_pos);
+    vec2 fract_pos = texel_pos - floor_pos;
+    ivec2 p00 = ivec2(floor_pos);
+    ivec2 p10 = p00 + ivec2(1, 0);
+    ivec2 p01 = p00 + ivec2(0, 1);
+    ivec2 p11 = p00 + ivec2(1, 1);
+    p00 = clamp(p00, ivec2(0), pc.in_dims - 1);
+    p10 = clamp(p10, ivec2(0), pc.in_dims - 1);
+    p01 = clamp(p01, ivec2(0), pc.in_dims - 1);
+    p11 = clamp(p11, ivec2(0), pc.in_dims - 1);
+    vec4 v00 = imageLoad(u_InputTexture, p00);
+    vec4 v10 = imageLoad(u_InputTexture, p10);
+    vec4 v01 = imageLoad(u_InputTexture, p01);
+    vec4 v11 = imageLoad(u_InputTexture, p11);
+    vec4 interp_x0 = mix(v00, v10, fract_pos.x);
+    vec4 interp_x1 = mix(v01, v11, fract_pos.x);
+    return mix(interp_x0, interp_x1, fract_pos.y);
+}
+
+
+void main() {
+    ivec2 out_coord = ivec2(gl_GlobalInvocationID.xy);
+    if (out_coord.x >= pc.out_dims.x || out_coord.y >= pc.out_dims.y) {
+        return;
+    }
+
+    // --- CROP & RESIZE LOGIC ---
+    // (This is your existing, correct logic)
+    ivec2 crop_offset = (pc.in_dims - pc.crop_dims) / 2;
+    vec2 scale = vec2(pc.crop_dims - 1) / vec2(pc.out_dims - 1);
+    vec2 crop_coord = vec2(out_coord) * scale;
+    vec2 in_coord = crop_coord + vec2(crop_offset);
+    vec2 uv = in_coord / vec2(pc.in_dims);
+    
+    // --- SAMPLING ---
+    // (This is your existing, correct logic)
+    vec4 color = textureBilinear(uv);
+
+    // --- WRITE TO BUFFER (THE FIX) ---
+    
+    // 1. Calculate the 1D pixel index using your 'pc' struct
+    uint pixel_index = uint(out_coord.y * pc.out_dims.x + out_coord.x);
+    
+    // 2. Calculate the base *float* index for tight RGB packing
+    uint out_base_index = pixel_index * 3;
+
+    // 3. Write the 3 float values
+    out_buffer.data[out_base_index + 0] = color.r;
+    out_buffer.data[out_base_index + 1] = color.g;
+    out_buffer.data[out_base_index + 2] = color.b;
+}
