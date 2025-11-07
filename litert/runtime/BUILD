@@ -591,7 +591,10 @@ cc_library(
 cc_test(
     name = "compiled_model_test",
     srcs = ["compiled_model_test.cc"],
-    data = ["//litert/test:testdata/simple_model.tflite"],
+    data = [
+        "//litert/test:testdata/simple_add_dynamic_shape.tflite",
+        "//litert/test:testdata/simple_model.tflite",
+    ],
     linkopts = litert_android_linkopts(),
     # require GPU to run OpenCL tests.
     tags = ["requires-gpu-nvidia"],
@@ -614,6 +617,7 @@ cc_test(
         "//litert/cc:litert_model",
         "//litert/cc:litert_ranked_tensor_type",
         "//litert/cc:litert_tensor_buffer",
+        "//litert/cc:litert_tensor_buffer_types",
         "//litert/cc/internal:litert_handle",
         "//litert/cc/options:litert_runtime_options",
         "//litert/core:options",
