@@ -1,35 +1,23 @@
 #pragma once
 
 #include <functional>  // For std::function
-#include <iostream>
 #include <memory>
-#include <string>
 #include <vector>
 
 // --- LiteRT C++ API Headers ---
 #include "absl/log/log.h"
-#include "absl/types/span.h"
-#include "litert/c/litert_common.h"
 #include "litert/cc/litert_compiled_model.h"
 #include "litert/cc/litert_environment.h"
 #include "litert/cc/litert_expected.h"
-#include "litert/cc/litert_macros.h"
 #include "litert/cc/litert_model.h"
 #include "litert/cc/litert_options.h"
-#include "litert/cc/litert_profiler.h"
 #include "litert/cc/litert_tensor_buffer.h"
-#include "litert/cc/options/litert_runtime_options.h"
 // ------------------------------
 
 // --- Project Headers ---
 #include "litert/samples/text_enhancer/image_processing/vulkan_image_processor.h"
 #include "litert/samples/text_enhancer/text_enhancer_api.h"
-#include "litert/samples/text_enhancer/utils/image_utils.h"
 // ---------------------
-
-#ifdef __ANDROID__
-#include "android/hardware_buffer.h"
-#endif
 
 /**
  * @brief The internal implementation of the opaque TextEnhancerSession.

@@ -2,7 +2,6 @@
 #define THIRD_PARTY_ODML_LITERT_LITERT_SAMPLES_SUPER_RES_VULKAN_IMAGE_PROCESSOR_H_
 
 #include <string>
-#include <vector>
 #include <memory>
 #include <vulkan/vulkan.h>
 #include "vulkan/vulkan_context.h"

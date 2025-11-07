@@ -1,4 +1,3 @@
-#include <cstring> // For memset
 #include <new>
 
 // --- RENAMED: Include new API header ---

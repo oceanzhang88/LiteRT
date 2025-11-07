@@ -1,4 +1,4 @@
-#include <utility> // For std::move
+#include <utility>  // For std::move
 
 // --- Base Header ---
 #include "base/text_enhancer_session_base.h"
@@ -34,8 +34,7 @@ extern "C" {
 /**
  * @brief Initializes the Text Enhancer instance (GPU Backend).
  */
-TextEnhancerSession* TextEnhancer_Initialize(
-    const TextEnhancerOptions& options) {
+TextEnhancerSession* TextEnhancer_Initialize(const TextEnhancerOptions& options) {
     LOG(INFO) << "TextEnhancer_Initialize (GPU Backend)...";
 
     // 1. Create backend-specific environment
@@ -46,20 +45,17 @@ TextEnhancerSession* TextEnhancer_Initialize(
     litert::Options litert_options = CreateGpuOptions();
 
     // 3. Call base initializer
-    return TextEnhancer_Initialize_Base(options, std::move(litert_options),
-                                        std::move(env_ptr));
+    return TextEnhancer_Initialize_Base(options, std::move(litert_options), std::move(env_ptr));
 }
 
 /**
  * @brief Runs the inference (GPU Backend).
  */
-TextEnhancerStatus TextEnhancer_Run(TextEnhancerSession* session,
-                                    float* inference_time_ms) {
+TextEnhancerStatus TextEnhancer_Run(TextEnhancerSession* session, float* inference_time_ms) {
     // Create a lambda for the backend-specific run call
     auto run_fn = [&]() {
         bool async = true;
-        return session->compiled_model->RunAsync(0, *session->input_buffers,
-                                                 *session->output_buffers, async);
+        return session->compiled_model->Run(*session->input_buffers, *session->output_buffers);
     };
 
     // Call the base run function to handle profiling

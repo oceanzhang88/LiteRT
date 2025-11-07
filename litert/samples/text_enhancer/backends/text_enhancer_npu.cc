@@ -17,6 +17,7 @@ litert::Options CreateNpuOptions() {
     qnn_options.SetHtpPerformanceMode(kLiteRtQualcommHtpPerformanceModeBurst);
     qnn_options.SetUseFoldReLU(true);
     qnn_options.SetUseConvHMX(true);
+    qnn_options.SetNumHvxThreads(4);
     qnn_options.SetUseHtpPreference(true);
     qnn_options.SetOptimizationLevel(kHtpOptimizeForInferenceO3);
 
