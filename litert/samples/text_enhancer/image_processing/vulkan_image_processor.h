@@ -94,8 +94,12 @@ class VulkanImageProcessor {
     int out_height_ = 0;
     VkDeviceSize out_size_bytes_ = 0;
 
+    // --- OPTIMIZATION: Device-local output buffer ---
     // This buffer is the *output* (written by shader)
-    // AND the *readback* (read by host)
+    VkBuffer output_buffer_device_ = VK_NULL_HANDLE;
+    VkDeviceMemory output_buffer_device_memory_ = VK_NULL_HANDLE;
+
+    // This buffer is the *readback* (read by host)
     VkBuffer readback_buffer_ = VK_NULL_HANDLE;
     VkDeviceMemory readback_buffer_memory_ = VK_NULL_HANDLE;
 

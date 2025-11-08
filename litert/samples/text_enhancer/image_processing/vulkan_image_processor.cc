@@ -1,5 +1,6 @@
 #include "litert/samples/text_enhancer/image_processing/vulkan_image_processor.h"
 
+#include <chrono>  // <-- ADDED for benchmarking
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
@@ -35,6 +36,8 @@ bool VulkanImageProcessor::Initialize(const std::string& shader_spirv_path, int 
             out_size_bytes_ = static_cast<VkDeviceSize>(out_width) * out_height * 3 * sizeof(float);
             std::cout << "Vulkan processor configured for FLOAT32 output." << std::endl;
         }
+        
+        std::cout << "Output buffer size: " << out_size_bytes_ << " bytes." << std::endl;
 
         // 1. Initialize core context
         context_ = std::make_unique<VulkanContext>();
@@ -214,18 +217,32 @@ bool VulkanImageProcessor::PreprocessImage(const unsigned char* in_data, int in_
         // e. Dispatch compute job
         vkCmdDispatch(cmd, (out_width_ + 7) / 8, (out_height_ + 7) / 8, 1);
 
-        // f. Add barrier to make sure shader writes to the *buffer* are finished
+        // f. Add barrier to make sure shader writes are finished before copy
         VkMemoryBarrier barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
         barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;  // Wait for host read
-        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_HOST_BIT,  // Wait in the host stage
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;  // Wait for transfer read
+        vkCmdPipelineBarrier(cmd,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT,  // Wait in transfer stage
                              0, 1, &barrier, 0, nullptr, 0, nullptr);
 
-        // g. End command buffer
+        // g. Copy device-local buffer to host-visible buffer
+        VkBufferCopy copy_region = {};
+        copy_region.size = out_size_bytes_;
+        vkCmdCopyBuffer(cmd, output_buffer_device_, readback_buffer_, 1, &copy_region);
+
+        // h. Add barrier to make sure copy is finished before host read
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;  // Wait for host read
+        vkCmdPipelineBarrier(cmd,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_HOST_BIT,  // Wait in host stage
+                             0, 1, &barrier, 0, nullptr, 0, nullptr);
+
+        // i. End command buffer
         vkEndCommandBuffer(cmd);
 
-        // h. Submit commands
+        // j. Submit commands
         VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
         submit_info.commandBufferCount = 1;
         submit_info.pCommandBuffers = &cmd;
@@ -256,8 +273,15 @@ bool VulkanImageProcessor::PreprocessImage(const unsigned char* in_data, int in_
         }
 
         std::cout << "[Debug PreprocessImage] Calling memcpy..." << std::endl;
+        
+        // --- BENCHMARK START ---
+        auto start_time = std::chrono::high_resolution_clock::now();
         memcpy(out_data, mapped_data, out_size_bytes_);
-        std::cout << "[Debug PreprocessImage] memcpy complete." << std::endl;
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+        std::cout << "[Debug PreprocessImage] memcpy complete. "
+                  << "Time taken: " << duration.count() << " microseconds." << std::endl;
+        // --- BENCHMARK END ---
 
         VulkanUtils::UnmapBufferMemory(device, readback_buffer_memory_);
         std::cout << "[Debug PreprocessImage] Data read back from GPU." << std::endl;
@@ -370,18 +394,32 @@ bool VulkanImageProcessor::PreprocessImage(AHardwareBuffer* in_buffer, int in_wi
         // d. Dispatch compute job
         vkCmdDispatch(cmd, (out_width_ + 7) / 8, (out_height_ + 7) / 8, 1);
 
-        // e. Add barrier to make sure shader writes to the *buffer* are finished
+        // e. Add barrier to make sure shader writes are finished before copy
         VkMemoryBarrier barrier = {VK_STRUCTURE_TYPE_MEMORY_BARRIER};
         barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;  // Wait for host read
-        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_HOST_BIT,  // Wait in the host stage
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;  // Wait for transfer read
+        vkCmdPipelineBarrier(cmd,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT,  // Wait in transfer stage
                              0, 1, &barrier, 0, nullptr, 0, nullptr);
 
-        // f. End command buffer
+        // f. Copy device-local buffer to host-visible buffer
+        VkBufferCopy copy_region = {};
+        copy_region.size = out_size_bytes_;
+        vkCmdCopyBuffer(cmd, output_buffer_device_, readback_buffer_, 1, &copy_region);
+
+        // g. Add barrier to make sure copy is finished before host read
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;  // Wait for host read
+        vkCmdPipelineBarrier(cmd,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_HOST_BIT,  // Wait in host stage
+                             0, 1, &barrier, 0, nullptr, 0, nullptr);
+
+        // h. End command buffer
         vkEndCommandBuffer(cmd);
 
-        // g. Submit commands
+        // i. Submit commands
         VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
         submit_info.commandBufferCount = 1;
         submit_info.pCommandBuffers = &cmd;
@@ -401,8 +439,15 @@ bool VulkanImageProcessor::PreprocessImage(AHardwareBuffer* in_buffer, int in_wi
             VulkanUtils::MapBufferMemory(device, readback_buffer_memory_, out_size_bytes_);
 
         std::cout << "[Debug PreprocessImage-AHB] Calling memcpy..." << std::endl;
+        
+        // --- BENCHMARK START ---
+        auto start_time_ahb = std::chrono::high_resolution_clock::now();
         memcpy(out_data, mapped_data, out_size_bytes_);
-        std::cout << "[Debug PreprocessImage-AHB] memcpy complete." << std::endl;
+        auto end_time_ahb = std::chrono::high_resolution_clock::now();
+        auto duration_ahb = std::chrono::duration_cast<std::chrono::microseconds>(end_time_ahb - start_time_ahb);
+        std::cout << "[Debug PreprocessImage-AHB] memcpy complete. "
+                  << "Time taken: " << float(duration_ahb.count()) / 1000.0 << " ms. " << std::endl;
+        // --- BENCHMARK END ---
 
         VulkanUtils::UnmapBufferMemory(device, readback_buffer_memory_);
         std::cout << "[Debug PreprocessImage-AHB] Data read back from GPU." << std::endl;
@@ -442,18 +487,28 @@ bool VulkanImageProcessor::createPersistentResources() {
     VkPhysicalDevice physical_device = context_->GetPhysicalDevice();
 
     try {
-        // 1. Create the output buffer (re-using readback_buffer_ variable)
-        //    This buffer is written by the shader and read by the host.
-        //    Size is now correctly set in Initialize()
-        std::cout << "[Debug PreprocessImage] Creating output/readback buffer..." << std::endl;
+        // --- MODIFICATION: Create two buffers ---
+
+        // 1. Create the device-local output buffer (written by shader)
+        std::cout << "[Debug PreprocessImage] Creating device-local output buffer..." << std::endl;
         VulkanUtils::CreateBuffer(
             device, physical_device, out_size_bytes_,
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,  // Shader writes to it
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,  // Shader writes, Transfer source
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            output_buffer_device_, output_buffer_device_memory_);
+
+        // 2. Create the host-visible readback buffer (copy destination)
+        std::cout << "[Debug PreprocessImage] Creating host-visible readback buffer..." << std::endl;
+        VulkanUtils::CreateBuffer(
+            device, physical_device, out_size_bytes_,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT,  // Transfer destination
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             readback_buffer_, readback_buffer_memory_);
-        std::cout << "[Debug PreprocessImage] Output/readback buffer created." << std::endl;
 
-        // 2. Create descriptor pool & set (persistent)
+        std::cout << "[Debug PreprocessImage] Output/readback buffers created." << std::endl;
+        // --- END MODIFICATION ---
+
+        // 3. Create descriptor pool & set (persistent)
         if (!createDescriptorPool()) {
             throw std::runtime_error("Failed to create descriptor pool.");
         }
@@ -463,7 +518,7 @@ bool VulkanImageProcessor::createPersistentResources() {
         }
         std::cout << "[Debug PreprocessImage] Descriptor set allocated and updated." << std::endl;
 
-        // 3. Create fence (persistent)
+        // 4. Create fence (persistent)
         VkFenceCreateInfo fence_info = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
         if (vkCreateFence(device, &fence_info, nullptr, &fence_) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create fence!");
@@ -491,6 +546,18 @@ void VulkanImageProcessor::destroyPersistentResources() {
         descriptor_pool_ = VK_NULL_HANDLE;
         descriptor_set_ = VK_NULL_HANDLE;
     }
+
+    // --- NEW: Clean up device-local buffer ---
+    if (output_buffer_device_ != VK_NULL_HANDLE) {
+        vkDestroyBuffer(device, output_buffer_device_, nullptr);
+        output_buffer_device_ = VK_NULL_HANDLE;
+    }
+    if (output_buffer_device_memory_ != VK_NULL_HANDLE) {
+        vkFreeMemory(device, output_buffer_device_memory_, nullptr);
+        output_buffer_device_memory_ = VK_NULL_HANDLE;
+    }
+    // --- END NEW ---
+
     if (readback_buffer_ != VK_NULL_HANDLE) {
         vkDestroyBuffer(device, readback_buffer_, nullptr);
         readback_buffer_ = VK_NULL_HANDLE;
@@ -545,7 +612,7 @@ bool VulkanImageProcessor::createDescriptorSet() {
     // Binding 0 (Input Image) will be updated in PreprocessImage
 
     VkDescriptorBufferInfo output_buffer_info = {};
-    output_buffer_info.buffer = readback_buffer_;
+    output_buffer_info.buffer = output_buffer_device_;  // <-- MODIFICATION: Point to device-local buffer
     output_buffer_info.offset = 0;
     output_buffer_info.range = out_size_bytes_;
 
