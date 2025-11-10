@@ -5,7 +5,7 @@
 #include <cstring> // For std::memcpy
 #include <cstdint> // <-- NEWLY ADDED
 
-#include "litert/samples/text_enhancer/utils/image_utils.h"
+#include "image_utils.h"
 
 // --- NEW: Include AHB header for Android ---
 #ifdef __ANDROID__

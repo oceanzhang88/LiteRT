@@ -15,9 +15,9 @@
 #   OPTIONS:
 #     --accelerator=cpu|gpu|npu  (Default: cpu)
 #     --preprocessor=cpu|vulkan  (Default: cpu)
-#     --datatype=float|int8      (Default: float. Selects Vulkan shader to use)
+#     --datatype=float|uint8      (Default: float. Selects Vulkan shader to use)
 #     --save_preprocessed        (Default: false)
-#     --phone=s25|s23            (Default: s25. Used for NPU lib path & model)
+#     --device=s25|vst            (Default: s25. Used for NPU lib path & model)
 #
 
 set -e
@@ -45,9 +45,9 @@ show_help() {
     echo "Options:"
     echo "  --accelerator=cpu|gpu|npu  (Default: cpu)"
     echo "  --preprocessor=cpu|vulkan  (Default: cpu)"
-    echo "  --datatype=float|int8      (Default: float. Selects Vulkan shader to use)"
+    echo "  --datatype=float|uint8      (Default: float. Selects Vulkan shader to use)"
     echo "  --save_preprocessed        (Default: false)"
-    echo "  --phone=s25|vst            (Default: s25. Used for NPU lib path & model)"
+    echo "  --device=s25|vst            (Default: s25. Used for NPU lib path & model)"
     echo "  --host_npu_lib=<path>          (Optional. Overrides default QNN host lib path)"
     echo "  --host_npu_dispatch_lib=<path> (Optional. Overrides default dispatch host lib path)"
     echo "  --help                     Show this help message"
@@ -78,8 +78,8 @@ while [[ $# -gt 0 ]]; do
         ;;
         --datatype=*)
         DATA_TYPE="${1#*=}"
-        if [[ "$DATA_TYPE" != "float" && "$DATA_TYPE" != "int8" ]]; then
-            echo "Error: Invalid value for --datatype. Must be 'float' or 'int8'." >&2
+        if [[ "$DATA_TYPE" != "float" && "$DATA_TYPE" != "uint8" ]]; then
+            echo "Error: Invalid value for --datatype. Must be 'float' or 'uint8'." >&2
             show_help
             exit 1
         fi
@@ -89,7 +89,7 @@ while [[ $# -gt 0 ]]; do
         SAVE_PREPROCESSED=true
         shift
         ;;
-        --phone=*)
+        --device=*)
         PHONE_MODEL="${1#*=}"
         shift
         ;;
@@ -139,13 +139,13 @@ echo "Selected Accelerator: $ACCELERATOR_NAME"
 echo "Selected Pre-processor: $PREPROCESSOR_TYPE"
 echo "Selected Data Type: $DATA_TYPE"
 echo "Save Preprocessed Image: $SAVE_PREPROCESSED"
-echo "Selected Phone Model: $PHONE_MODEL"
+echo "Selected device Model: $PHONE_MODEL"
 echo "Script directory: $SCRIPT_DIR" # Added for debug
 
 # --- Define Shader Filename based on Data Type ---
 SHADER_BASENAME="crop_resize_float.spv" # Default
-if [ "$DATA_TYPE" == "int8" ]; then
-    SHADER_BASENAME="crop_resize_int8.spv"
+if [ "$DATA_TYPE" == "uint8" ]; then
+    SHADER_BASENAME="crop_resize_uint8.spv"
 fi
 if [ "$PREPROCESSOR_TYPE" == "vulkan" ]; then
     echo "Using Vulkan Shader: $SHADER_BASENAME"
@@ -171,23 +171,48 @@ case "$PHONE_MODEL" in
         ;;
     *)
         if [ "$ACCELERATOR_NAME" == "npu" ]; then
-            echo "Error: Unsupported phone model '$PHONE_MODEL' for NPU. Supported models are 's23', 's25'." >&2
+            echo "Error: Unsupported device model '$PHONE_MODEL' for NPU. Supported models are 's23', 's25'." >&2
             exit 1
         fi
         ;;
 esac
 
 # --- Model Selection ---
-# Select the correct model based on accelerator and phone
+# Select the correct model based on accelerator, device, and datatype
 MODEL_BASENAME="super_res-float_gpu.tflite" # Default for CPU/GPU
+
 if [[ "$ACCELERATOR_NAME" == "npu" ]]; then
+    # --- NPU Path ---
     if [[ "$PHONE_MODEL" == "vst" ]]; then
-        MODEL_BASENAME="super_res-float_npu_vst.tflite"
-    elif [[ "$PHONE_MODEL" == "s25" ]]; then
-        # MODEL_BASENAME="real_x4v3_8750-float.tflite"
-        MODEL_BASENAME="super_res-float_npu.tflite"
+        if [[ "$DATA_TYPE" == "uint8" ]]; then
+        # NPU uint8 models
+            MODEL_BASENAME="super_res-w8a8_SM8450.tflite"
+        else 
+            # Using the w8a8 model available in your models/ folder
+            MODEL_BASENAME="super_res-float_npu_vst.tflite" 
+        fi
+        echo "Using NPU uint8 Model: $MODEL_BASENAME"
+
+    else
+        # NPU Float models (defaulting to float if not uint8)
+        if [[ "$DATA_TYPE" == "uint8" ]]; then
+            MODEL_BASENAME="super_res-w8a8_SM8450.tflite"
+        else
+             MODEL_BASENAME="super_res-float_npu.tflite" # Default float
+        fi
+        echo "Using NPU Float Model: $MODEL_BASENAME"
     fi
-    echo "Using NPU Model: $MODEL_BASENAME"
+else
+    # --- CPU/GPU Path ---
+    if [[ "$DATA_TYPE" == "uint8" ]]; then
+        # As we discovered, the CPU/GPU path doesn't support uint8
+        echo "WARNING: uint8 datatype is not supported for --accelerator=$ACCELERATOR_NAME."
+        echo "WARNING: Attempting to use a w8a8 model anyway, but this will likely fail."
+        MODEL_BASENAME="super_res-w8a8_SM8450.tflite"
+    else
+        # Default float for CPU/GPU (already set)
+        echo "Using CPU/GPU Model: $MODEL_BASENAME"
+    fi
 fi
 
 
@@ -343,6 +368,10 @@ if [ "$SAVE_PREPROCESSED" = true ]; then
     SAVE_PREPROCESSED_FLAG="--save_preprocessed=true"
 fi
 
+# --- ADDED: Pass the datatype to the executable ---
+DATATYPE_FLAG="--datatype=$DATA_TYPE"
+# --- End Addition ---
+
 # --- MODIFIED: The 5th argument is now a "base name" for the 10 outputs ---
 RUN_COMMAND="./$EXECUTABLE_NAME_ON_DEVICE \
      ./$LIB_NAME_ON_DEVICE \
@@ -351,6 +380,7 @@ RUN_COMMAND="./$EXECUTABLE_NAME_ON_DEVICE \
      ./$OUTPUT_IMAGE_BASENAME \
      $PREPROCESSOR_FLAG \
      $SHADER_FLAG \
+     $DATATYPE_FLAG \
      $SAVE_PREPROCESSED_FLAG \
      --platform=android \
      "

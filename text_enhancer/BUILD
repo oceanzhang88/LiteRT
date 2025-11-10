@@ -23,8 +23,8 @@ filegroup(
         "shaders/super_res_compute.glsl",
         "shaders/crop_resize_float.comp",
         "shaders/crop_resize_float.spv",
-        "shaders/crop_resize_int8.comp",
-        "shaders/crop_resize_int8.spv",
+        "shaders/crop_resize_uint8.comp",
+        "shaders/crop_resize_uint8.spv",
     ],
 )
 
@@ -49,6 +49,7 @@ filegroup(
         "models/real_x4v3_8650-float.tflite",
         "models/real_x4v3_8750-float.tflite",
         "models/real_x4v3-w8a8.tflite",
+        "models/super_res-w8a8_SM8450.tflite",
         # "models/selfie_multiclass_256x256_SM8750.tflite",
     ],
 )
@@ -199,9 +200,9 @@ cc_library(
         "-llog", # This is for Android log, can be kept
     ],
     deps = [
-        "//litert/samples/text_enhancer/image_processing/vulkan:vulkan_compute_pipeline",
-        "//litert/samples/text_enhancer/image_processing/vulkan:vulkan_context",
-        "//litert/samples/text_enhancer/image_processing/vulkan:vulkan_utils",
+        "//text_enhancer/image_processing/vulkan:vulkan_compute_pipeline",
+        "//text_enhancer/image_processing/vulkan:vulkan_context",
+        "//text_enhancer/image_processing/vulkan:vulkan_utils",
         "@vulkan_headers",
         "@com_google_absl//absl/log",  
     ],

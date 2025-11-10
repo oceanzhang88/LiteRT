@@ -42,10 +42,17 @@ typedef struct {
  * Represents the output data from the text enhancement process.
  */
 typedef struct {
+    // --- Fields for raw CPU buffer output ---
     uint8_t* data;
     int width;
     int height;
     int channels;
+
+    // --- Field for AHardwareBuffer output ---
+#ifdef __ANDROID__
+    AHardwareBuffer* output_buffer;
+#endif
+
 } TextEnhancerOutput;
 
 /**
@@ -99,12 +106,15 @@ TextEnhancerStatus TextEnhancer_Run(TextEnhancerSession* session, float* inferen
  *
  * @param session The instance session.
  * @param output A struct to be filled with the output image data and dims.
+ * On Android, this may fill 'output_buffer'.
+ * On other platforms, it will fill 'data', 'width', 'height'.
  * @return kTextEnhancerOk on success.
  */
 TextEnhancerStatus TextEnhancer_PostProcess(TextEnhancerSession* session, TextEnhancerOutput& output);
 
 /**
  * Frees the data buffer allocated within the TextEnhancerOutput struct.
+ * If output_buffer is non-NULL, it will be released.
  *
  * @param output The output struct whose data will be freed.
  */

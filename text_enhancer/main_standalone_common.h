@@ -59,13 +59,85 @@ static std::string GetFlagValue(int argc, char** argv, const std::string& flag, 
     return default_value;
 }
 
+// --- NEW HELPER FUNCTION 1 ---
+// Helper to convert RGBA (4-ch) to RGB (3-ch)
+inline std::vector<unsigned char> ConvertRgbaToRgb(const unsigned char* data, int width, int height) {
+    std::vector<unsigned char> rgb_data(width * height * 3);
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            int rgba_idx = (y * width + x) * 4;
+            int rgb_idx = (y * width + x) * 3;
+            rgb_data[rgb_idx + 0] = data[rgba_idx + 0]; // R
+            rgb_data[rgb_idx + 1] = data[rgba_idx + 1]; // G
+            rgb_data[rgb_idx + 2] = data[rgba_idx + 2]; // B
+            // Skip A
+        }
+    }
+    return rgb_data;
+}
+
+// --- NEW HELPER FUNCTION 2 ---
+// Helper function to convert and save the output image
+inline void SaveOutputImage(const std::string& path,
+                            const TextEnhancerOutput& output_data,
+                            const std::string& datatype_str) {
+
+    // --- Output Conversion Logic ---
+    std::vector<unsigned char> output_image_bytes(output_data.width * output_data.height * 3);
+
+    if (datatype_str == "uint8") {
+        // --- NEW: uint8 Dequantization Path ---
+        // We are receiving a buffer of int8_t
+        int8_t* output_data_int8 = reinterpret_cast<int8_t*>(output_data.data);
+
+        for (int y = 0; y < output_data.height; ++y) {
+            for (int x = 0; x < output_data.width; ++x) {
+                int in_idx = (y * output_data.width + x) * output_data.channels;
+                int out_idx = (y * output_data.width + x) * 3;
+
+                uint8_t r_byte = static_cast<uint8_t>(output_data_int8[in_idx + 0]);
+                uint8_t g_byte = static_cast<uint8_t>(output_data_int8[in_idx + 1]);
+                uint8_t b_byte = static_cast<uint8_t>(output_data_int8[in_idx + 2]);
+
+                output_image_bytes[out_idx + 0] = r_byte;
+                output_image_bytes[out_idx + 1] = g_byte;
+                output_image_bytes[out_idx + 2] = b_byte;
+            }
+        }
+    } else {
+        // --- Existing Float Conversion Path ---
+        // We are receiving a buffer of float
+        float* output_data_float = reinterpret_cast<float*>(output_data.data);
+
+        for (int y = 0; y < output_data.height; ++y) {
+            for (int x = 0; x < output_data.width; ++x) {
+                int in_idx = (y * output_data.width + x) * output_data.channels;
+                int out_idx = (y * output_data.width + x) * 3;
+
+                // Convert: Map float range [0.0, 1.0] to uint8_t [0, 255]
+                output_image_bytes[out_idx + 0] =
+                    static_cast<unsigned char>(std::max(0.0f, std::min(255.0f, output_data_float[in_idx + 0] * 255.0f)));
+                output_image_bytes[out_idx + 1] =
+                    static_cast<unsigned char>(std::max(0.0f, std::min(255.0f, output_data_float[in_idx + 1] * 255.0f)));
+                output_image_bytes[out_idx + 2] =
+                    static_cast<unsigned char>(std::max(0.0f, std::min(255.0f, output_data_float[in_idx + 2] * 255.0f)));
+            }
+        }
+    }
+
+    // --- Save This Run's Image ---
+    ImageUtils::SaveImage(path.c_str(), output_data.width, output_data.height, 3, output_image_bytes.data());
+}
+// --- END NEW HELPER FUNCTIONS ---
+
+
 // Common main function (inline to avoid multiple definitions)
 inline int RunStandaloneSession(int argc, char** argv, const std::string& accelerator_name) {
     if (argc < 5) {
         std::cerr << "Usage: " << argv[0] << " <lib_path.so> <model_path> <input_image> <output_image_base_path>"
                   << " [--preprocessor=cpu|vulkan]"
                   << " [--shader_path=path/to/shader]"
-                  << " [--datatype=float|int8]" // <-- MODIFIED: Added datatype
+                  << " [--datatype=float|uint8]" // <-- MODIFIED: Added datatype
                   << " [--platform=desktop|android]"
                   << " [--save_preprocessed=true|false]" << std::endl;
         std::cerr << "Note: <output_image_base_path> will be used to generate output_run_images/basename_0.png, etc." << std::endl;
@@ -112,9 +184,9 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
     std::string preprocessor_type_str = GetFlagValue(argc, argv, "--preprocessor=", "vulkan");
     std::string save_preprocessed_str = GetFlagValue(argc, argv, "--save_preprocessed=", "false");
     bool save_preprocessed = (save_preprocessed_str == "true");
-
+    
     // --- ADDED: Parse datatype flag ---
-    std::string datatype_str = GetFlagValue(argc, argv, "--datatype=", "float");
+    std::string datatype_str = GetFlagValue(argc, argv, "--datatype=", "uint8");
     // ---------------------------------
 
     std::string compute_shader_path_str = "";
@@ -143,7 +215,7 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
 
     if (preprocessor_type_str == "vulkan") {
         // --- MODIFIED: Default shader path is now based on datatype ---
-        std::string default_shader = (datatype_str == "int8") ? "shaders/crop_resize_int8.spv" : "shaders/crop_resize_float.spv";
+        std::string default_shader = (datatype_str == "uint8") ? "shaders/crop_resize_uint8.spv" : "shaders/crop_resize_float.spv";
         compute_shader_path_str = GetFlagValue(argc, argv, "--shader_path=", default_shader);
         // -----------------------------------------------------------
         compute_shader_path = compute_shader_path_str.c_str();
@@ -174,9 +246,9 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
     options.input_height = img_height;
 
     // --- ADDED: Set preprocessor type based on datatype flag ---
-    if (datatype_str == "int8") {
+    if (datatype_str == "uint8") {
         options.use_int8_preprocessor = true;
-        std::cout << "[Debug main] Setting preprocessor data type: INT8" << std::endl;
+        std::cout << "[Debug main] Setting preprocessor data type: UINT8" << std::endl;
     } else {
         options.use_int8_preprocessor = false;
         std::cout << "[Debug main] Setting preprocessor data type: FLOAT" << std::endl;
@@ -277,7 +349,10 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
                 uint8_t* pre_data = nullptr;
                 TextEnhancerStatus status = fn_TextEnhancer_GetPreprocessedData(session, &pre_data);
                 if (status == kTextEnhancerOk && pre_data) {
-                    ImageUtils::SaveImage("preprocessed_output.png", options.input_width, options.input_height, 4, pre_data);
+                    // --- MODIFIED: Convert to 3-ch RGB and save ---
+                    std::vector<unsigned char> rgb_buffer = 
+                        ConvertRgbaToRgb(pre_data, options.input_width, options.input_height);
+                    ImageUtils::SaveImage("preprocessed_output.png", options.input_width, options.input_height, 3, rgb_buffer.data());
                     std::cout << "Pre-processed image saved to preprocessed_output.png" << std::endl;
                 } else {
                     std::cerr << "Failed to get pre-processed data for saving." << std::endl;
@@ -308,7 +383,10 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
                 uint8_t* pre_data = nullptr;
                 TextEnhancerStatus status = fn_TextEnhancer_GetPreprocessedData(session, &pre_data);
                 if (status == kTextEnhancerOk && pre_data) {
-                    ImageUtils::SaveImage("preprocessed_output.png", options.input_width, options.input_height, 4, pre_data);
+                    // --- MODIFIED: Convert to 3-ch RGB and save ---
+                    std::vector<unsigned char> rgb_buffer = 
+                        ConvertRgbaToRgb(pre_data, options.input_width, options.input_height);
+                    ImageUtils::SaveImage("preprocessed_output.png", options.input_width, options.input_height, 3, rgb_buffer.data());
                     std::cout << "Pre-processed image saved to preprocessed_output.png" << std::endl;
                 } else {
                     std::cerr << "Failed to get pre-processed data for saving." << std::endl;
@@ -364,28 +442,15 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
         std::cout << "Total E2E Time (Pre + Run + Post): " << total_e2e_ms << " ms" << std::endl;
 
         // --- Output Conversion Logic ---
-        float* output_data_float = reinterpret_cast<float*>(output_data.data);
-        std::vector<unsigned char> output_image_bytes(output_data.width * output_data.height * 3);
-        for (int y = 0; y < output_data.height; ++y) {
-            for (int x = 0; x < output_data.width; ++x) {
-                int in_idx = (y * output_data.width + x) * output_data.channels;
-                int out_idx = (y * output_data.width + x) * 3;
-
-                output_image_bytes[out_idx + 0] =
-                    static_cast<unsigned char>(std::max(0.0f, std::min(255.0f, output_data_float[in_idx + 0] * 255.0f)));
-                output_image_bytes[out_idx + 1] =
-                    static_cast<unsigned char>(std::max(0.0f, std::min(255.0f, output_data_float[in_idx + 1] * 255.0f)));
-                output_image_bytes[out_idx + 2] =
-                    static_cast<unsigned char>(std::max(0.0f, std::min(255.0f, output_data_float[in_idx + 2] * 255.0f)));
-            }
-        }
+        // --- THIS BLOCK IS NOW REPLACED BY THE HELPER FUNCTION ---
 
         // --- Save This Run's Image ---
         std::ostringstream oss;
         oss << output_run_dir << "/" << output_base_name << "_" << i << output_extension;
         std::string current_output_path = oss.str();
         
-        ImageUtils::SaveImage(current_output_path.c_str(), output_data.width, output_data.height, 3, output_image_bytes.data());
+        // --- MODIFIED: Call helper function ---
+        SaveOutputImage(current_output_path, output_data, datatype_str);
         std::cout << "Output image " << i << " saved to " << current_output_path << std::endl;
 
         // --- Free this run's output data ---

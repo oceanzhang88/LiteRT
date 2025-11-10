@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sys/types.h>
+#include <cstdint>
 #include <functional>  // For std::function
 #include <memory>
 #include <vector>
@@ -15,8 +17,8 @@
 // ------------------------------
 
 // --- Project Headers ---
-#include "litert/samples/text_enhancer/image_processing/vulkan_image_processor.h"
-#include "litert/samples/text_enhancer/text_enhancer_api.h"
+#include "text_enhancer/image_processing/vulkan_image_processor.h"
+#include "text_enhancer/text_enhancer_api.h"
 // ---------------------
 
 /**
@@ -49,7 +51,12 @@ struct TextEnhancerSession {
 
     // --- Pre-processing resources ---
     std::unique_ptr<VulkanImageProcessor> vulkan_processor;
-    std::vector<float> preprocessed_data;
+    // Buffers for different data types
+    std::vector<float> preprocessed_data_float;
+    std::vector<uint8_t> preprocessed_data_uint8;
+
+    // Flag to know which buffer is active
+    bool is_int8_input;
 };
 
 /**

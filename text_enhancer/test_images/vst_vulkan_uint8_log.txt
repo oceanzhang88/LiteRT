@@ -1,0 +1,645 @@
+(base) ➜  LiteRT git:(main) ✗ ./litert/samples/text_enhancer/deploy_and_run_on_android.sh --accelerator=npu --preprocessor=vulkan --device=vst --datatype=uint8 bazel-bin/
+Selected Accelerator: npu
+Selected Pre-processor: vulkan
+Selected Data Type: uint8
+Save Preprocessed Image: false
+Selected device Model: vst
+Script directory: /Users/ocean/AI/Headset/LiteRT/litert/samples/text_enhancer
+Using Vulkan Shader: crop_resize_uint8.spv
+Configuring for XRGEN2+ using V69 NPU libraries.
+Using NPU uint8 Model: super_res-w8a8_SM8450.tflite
+Defaulting to QNN libraries path.
+Defaulting to internal dispatch library path.
+Starting deployment to Android device...
+Using output path: bazel-bin/litert/samples/text_enhancer/text_enhancer_standalone_npu
+Created directories on device.
+bazel-bin/litert/samples/text_enhancer/text_enhancer_standa...ile pushed, 0 skipped. 383.0 MB/s (4618184 bytes in 0.012s
+Pushed executable.
+/Users/ocean/AI/Headset/LiteRT/litert/samples/text_enhancer... 1 file pushed, 0 skipped. 70.9 MB/s (6068 bytes in 0.000s
+Pushed Vulkan pre-processor shader (crop_resize_uint8.spv).
+/Users/ocean/AI/Headset/LiteRT/litert/samples/text_enhancer...file pushed, 0 skipped. 64.3 MB/s (3191575 bytes in 0.047s
+Pushed test images.
+/Users/ocean/AI/Headset/LiteRT/litert/samples/text_enhancer...ile pushed, 0 skipped. 227.5 MB/s (1959184 bytes in 0.008s
+Pushed text enhancer model (super_res-w8a8_SM8450.tflite).
+bazel-bin/litert/c/libLiteRtRuntimeCApi.so: 1 file pushed, 0 skipped. 140.9 MB/s (5082128 bytes in 0.034s)
+Pushed C API shared library.
+bazel-bin/litert/samples/text_enhancer/text_enhancer_lib_np...ile pushed, 0 skipped. 194.7 MB/s (8214336 bytes in 0.040s
+Pushed project API library (bazel-bin/litert/samples/text_enhancer/text_enhancer_lib_npu.so).
+Pushing NPU libraries...
+bazel-bin/litert/samples/text_enhancer/text_enhancer_standa...file pushed, 0 skipped. 371.1 MB/s (646048 bytes in 0.002s
+Pushed NPU dispatch library.
+bazel-bin/litert/samples/text_enhancer/text_enhancer_standa...ile pushed, 0 skipped. 288.7 MB/s (2467216 bytes in 0.008s
+bazel-bin/litert/samples/text_enhancer/text_enhancer_standa...file pushed, 0 skipped. 416.1 MB/s (708176 bytes in 0.002s
+bazel-bin/litert/samples/text_enhancer/text_enhancer_standa...ile pushed, 0 skipped. 332.9 MB/s (2549880 bytes in 0.007s
+bazel-bin/litert/samples/text_enhancer/text_enhancer_standa...ile pushed, 0 skipped. 87.4 MB/s (69160384 bytes in 0.755s
+bazel-bin/litert/samples/text_enhancer/text_enhancer_standa...ile pushed, 0 skipped. 157.1 MB/s (9171184 bytes in 0.056s
+Pushed QNN NPU libraries.
+Set execute permissions on device.
+Cleaning up previous run results
+
+Deployment complete.
+To run the text enhancer sample on the device, use a command like this:
+  adb shell "cd /data/local/tmp/text_enhancer_android && LD_LIBRARY_PATH="/data/local/tmp/text_enhancer_android/npu:/data/local/tmp/text_enhancer_android" ADSP_LIBRARY_PATH="/data/local/tmp/text_enhancer_android/npu/" ./text_enhancer_standalone_npu      ./text_enhancer_lib_npu.so      ./models/super_res-w8a8_SM8450.tflite      ./test_images/low_res_image.png      ./output      --preprocessor=vulkan      --shader_path=shaders/crop_resize_uint8.spv      --datatype=uint8            --platform=android      "
+Loaded library: ./text_enhancer_lib_npu.so
+All symbols loaded.
+Running on 'android' platform. Defaulting to Vulkan preprocessor.
+[Debug main] compute_shader_path set to: 'shaders/crop_resize_uint8.spv'
+Loaded input image: 1500x1500x3
+[Debug main] Calling TextEnhancer_Initialize...
+[Debug main] Setting preprocessor data type: UINT8
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1755689730.388954   13796 text_enhancer_npu.cc:39] TextEnhancer_Initialize (NPU Backend)...
+INFO: [litert/core/environment.cc:29] Creating LiteRT environment with options
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1755689730.389568   13796 accelerator_registry.cc:51] RegisterAccelerator: ptr=0xb4000072d02319b0, name=NpuAccelerator
+INFO: [litert/runtime/accelerators/auto_registration.cc:63] NPU accelerator registered.
+VERBOSE: [litert/runtime/accelerators/auto_registration.cc:130] Loading GPU accelerator(libLiteRtGpuAccelerator.so).
+VERBOSE: [litert/runtime/accelerators/auto_registration.cc:147] Failed to load GPU accelerator(libLiteRtGpuAccelerator.so): kLiteRtStatusErrorDynamicLoading, ERROR: [litert/runtime/accelerators/auto_registration.cc:183]
+└ Could not load shared library libLiteRtGpuAccelerator.so: dlopen failed: library "libLiteRtGpuAccelerator.so" not found..
+VERBOSE: [litert/runtime/accelerators/auto_registration.cc:130] Loading GPU accelerator(libLiteRtOpenClAccelerator.so).
+I0000 00:00:1755689730.391250   13796 accelerator_registry.cc:51] RegisterAccelerator: ptr=0xb4000072d0231a90, name=GPU OpenCL
+INFO: [litert/runtime/accelerators/auto_registration.cc:137] Dynamically loaded GPU accelerator(libLiteRtOpenClAccelerator.so) registered.
+I0000 00:00:1755689730.391326   13796 accelerator_registry.cc:51] RegisterAccelerator: ptr=0xb4000072d0231390, name=CpuAccelerator
+INFO: [litert/runtime/accelerators/auto_registration.cc:168] CPU accelerator registered.
+I0000 00:00:1755689730.391533   13796 text_enhancer_session_base.cc:53] [Debug TextEnhancer_Initialize] Model Input: 256x256x3
+I0000 00:00:1755689730.391591   13796 text_enhancer_session_base.cc:63] Model input type is Int8. Allocating uint8_t buffer.
+I0000 00:00:1755689730.391738   13796 text_enhancer_session_base.cc:75] Initializing Vulkan Pre-processor...
+Vulkan processor configured for INT8 output.
+Output buffer size: 196608 bytes.
+Vulkan instance created.
+Vulkan physical device found.
+Vulkan logical device created.
+Vulkan command pool created.
+VulkanContext initialized successfully.
+Loaded AHB extension functions.
+Vulkan compute pipeline created.
+[Debug PreprocessImage] Creating device-local output buffer...
+[Debug PreprocessImage] Creating host-visible readback buffer...
+[Debug PreprocessImage] Output/readback buffers created.
+[Debug PreprocessImage] Allocating descriptor set...
+[Debug PreprocessImage] Descriptor set (Binding 1) updated.
+[Debug PreprocessImage] Descriptor set allocated and updated.
+VulkanImageProcessor initialized successfully.
+INFO: [litert/runtime/compiled_model.cc:453] Flatbuffer model initialized directly from incoming litert model.
+INFO: Initialized TensorFlow Lite runtime.
+VERBOSE: [litert/core/dynamic_loading.cc:83] Found shared library: /data/local/tmp/super_res_acc_android/npu/libLiteRtDispatch_Qualcomm.so
+INFO: [litert/runtime/dispatch/litert_dispatch.cc:126] Loading shared library: /data/local/tmp/super_res_acc_android/npu/libLiteRtDispatch_Qualcomm.so
+INFO: [./litert/vendors/qualcomm/common.h:122] 
+::qnn::Options:
+LogLevel: 3
+Profiling: 0
+UseHtpPreference: true
+UseQint16AsQuint16: false
+EnableWeightSharing: false
+UseConvHMX: true
+UseFoldReLU: true
+HtpPerformanceMode: 2
+DumpTensorIds: 
+IrJsonDir: 
+VtcmSize: 0
+HvxThread: 4
+OptimizationLevel: 2
+
+INFO: [litert/vendors/qualcomm/qnn_manager.cc:348] Adding shared library dir to path: /data/local/tmp/super_res_acc_android/npu/
+VERBOSE: [litert/core/dynamic_loading.cc:76] Found shared library: /data/local/tmp/super_res_acc_android/npu/libQnnHtp.so
+INFO: [litert/core/dynamic_loading.cc:143] Adding /data/local/tmp/text_enhancer_android/npu:/data/local/tmp/text_enhancer_android:/data/local/tmp/super_res_acc_android/npu to LD_LIBRARY_PATH
+INFO: [litert/vendors/qualcomm/qnn_manager.cc:107] Loading qnn shared library from "libQnnHtp.so"
+INFO: [litert/vendors/qualcomm/qnn_manager.cc:110] Loaded qnn shared library
+WARNING: [litert/vendors/qualcomm/qnn_manager.cc:180] Qnn library version 2.28.0 is used. The version LiteRT using is 2.26.0.
+WARNING: [litert/vendors/qualcomm/qnn_manager.cc:217] Qnn backend library version 5.37.0 is used. The version LiteRT using is 5.35.0.
+ERROR: [Qnn] Failed to find available SoC!
+INFO: [Qnn] Succssfully get platform info. SoC model: 53. SoC name: NotFound.
+WARNING: [Qnn] Fail to get SoC info, using default.
+INFO: [Qnn] Initializing QNN backend for SoC model: SM8650
+INFO: [Qnn] Set HTP performance mode: 2
+INFO: [litert/runtime/dispatch/dispatch_delegate.cc:172] Dispatch API vendor ID: Qualcomm
+INFO: [litert/runtime/dispatch/dispatch_delegate.cc:176] Dispatch API build ID: Qualcomm Dispatch API version 0.1.0, QNN API version 2.28.0, build id: v2.37.1.250807093845_124904
+INFO: [litert/runtime/dispatch/dispatch_delegate.cc:181] Dispatch API version: 0.1.0
+INFO: [litert/runtime/dispatch/dispatch_delegate.cc:192] Dispatch API capabilities: 1
+VERBOSE: Replacing 1 out of 1 node(s) with delegate (DispatchDelegate) node, yielding 1 partitions for subgraph 0.
+INFO: [litert/vendors/qualcomm/context_binary_info.cc:110] Found qnn graph: qnn_partition_0
+INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
+     0.0ms [  INFO ]  QnnDsp <I> QnnLog_create started.
+     0.0ms [WARNING]  QnnDsp <W> Initializing HtpProvider
+     0.0ms [  INFO ]  QnnDsp <I> exit with 0
+     0.0ms [  INFO ]  QnnDsp <I> exit with 0
+     0.0ms [  INFO ]  QnnDsp <I> QnnLog_create exit.
+     0.0ms [  INFO ]  QnnDsp <I> QnnBackend_create started. backend = 0xee998268
+     0.0ms [  INFO ]  QnnDsp <I> QnnBackend_create done successfully. backend = 0xee998268
+     0.0ms [  INFO ]  QnnDsp <I> QnnDevice_create started
+     0.0ms [WARNING]  QnnDsp <W> Specified config SOC, ignoring on real target
+     0.0ms [  INFO ]  QnnDsp <I> First connection to QNN stub established!
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [  INFO ]  QnnDsp <I> QnnDevice_create done. device = 0x1. status 0x0
+     0.0ms [  INFO ]  QnnDsp <I> htpPerfInfrastructureCreatePowerConfigId started for deviceId: 0, coreId: 0
+
+     0.0ms [  INFO ]  QnnDsp <I> htpPerfInfrastructureCreatePowerConfigId done. status 0x0
+     0.0ms [  INFO ]  QnnDsp <I> htpPerfInfrastructureSetPowerConfig started for powerConfigId: 1483690296
+
+     0.0ms [  INFO ]  QnnDsp <I> htpPerfInfrastructureSetPowerConfig done. status 0x0
+     0.0ms [  INFO ]  QnnDsp <I> htpPerfInfrastructureSetPowerConfig started for powerConfigId: 1483690296
+
+     0.0ms [  INFO ]  QnnDsp <I> htpPerfInfrastructureSetPowerConfig done. status 0x0
+     0.0ms [  INFO ]  QnnDsp <I> QnnContext_createFromBinary started. backend = 0x1, device = 0x1
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [  INFO ]  QnnDsp <I> graph qnn_partition_0 is loaded 1
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [  INFO ]  QnnDsp <I> Number of existing contexts: 1, graphs: 1
+     0.0ms [  INFO ]  QnnDsp <I> QnnContext_createFromBinary done successfully. context = 0x1
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_retrieve started. context = 0x1
+     0.0ms [  INFO ]  QnnDsp <I> Number of existing contexts: 1, graphs: 1
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_retrieve done. status 0x0
+TextEnhancer session initialized.
+Saving 10 output images to 'output_run_images' directory.
+Converting loaded image to AHardwareBuffer...
+[Debug CreateAhb] Warning: AHB stride (1792) != width (1500). Performing row-by-row copy.
+Successfully created and populated AHardwareBuffer (width: 1500, stride: 1792).
+
+--- Run 1/10 ---
+Pre-processing with AHardwareBuffer...
+[Debug PreprocessImage-AHB] Entering function.
+[Debug PreprocessImage-AHB] Importing AHB...
+[Debug PreprocessImage-AHB] AHB imported successfully. Format: 37
+[Debug PreprocessImage-AHB] Descriptor set updated.
+[Debug PreprocessImage] Beginning one-time commands...
+[Debug PreprocessImage-AHB] Submitting commands...
+[Debug PreprocessImage-AHB] Commands submitted and awaited.
+[Debug PreprocessImage-AHB] Mapping readback buffer...
+[Debug mapBufferMemory] Calling vkMapMemory... (device=0xb400007220226e50, memory=0xb400007230228330, size=196608)
+[Debug mapBufferMemory] vkMapMemory returned. Result: 0
+[Debug mapBufferMemory] Returning mapped pointer: 0x742b2ff000
+[Debug PreprocessImage-AHB] Calling memcpy...
+[Debug PreprocessImage-AHB] memcpy complete. Time taken: 0.185 ms. 
+[Debug unmapBufferMemory] Calling vkUnmapMemory...
+[Debug unmapBufferMemory] vkUnmapMemory returned.
+[Debug PreprocessImage-AHB] Data read back from GPU.
+[Debug PreprocessImage-AHB] Cleaning up resources after success...
+[Debug PreprocessImage-AHB] Returning true from success path.
+Pre-processing (AHB) complete.
+I0000 00:00:1755689730.597340   13796 text_enhancer_session_base.cc:159] --- Per-Event Profiler Breakdown ---
+I0000 00:00:1755689730.597405   13796 text_enhancer_session_base.cc:163]   Event 0: [LiteRT::Run[buffer registration]], Time: 0.166 ms
+I0000 00:00:1755689730.597446   13796 text_enhancer_session_base.cc:163]   Event 1: [AllocateTensors], Time: 0.074 ms
+I0000 00:00:1755689730.597458   13796 text_enhancer_session_base.cc:163]   Event 2: [Invoke], Time: 9.426 ms
+I0000 00:00:1755689730.597498   13796 text_enhancer_session_base.cc:163]   Event 3: [DELEGATE], Time: 9.365 ms
+I0000 00:00:1755689730.597507   13796 text_enhancer_session_base.cc:163]   Event 4: [Invoke], Time: 4.29497e+06 ms
+I0000 00:00:1755689730.597516   13796 text_enhancer_session_base.cc:163]   Event 5: [LiteRT::Run[Buffer sync]], Time: 0.027 ms
+I0000 00:00:1755689730.597526   13796 text_enhancer_session_base.cc:168] ----------------------------------------
+I0000 00:00:1755689730.597537   13796 text_enhancer_session_base.cc:172] Total Child Event Time (Sum of Layers/Ops): 4.29499e+06 ms
+I0000 00:00:1755689730.597546   13796 text_enhancer_session_base.cc:174] Total 'Invoke' Time (Includes Overhead): 9.426 ms
+     0.0ms [  INFO ]  QnnDsp <I> QnnMem_register started. context 0x1 
+     0.0ms [  INFO ]  QnnDsp <I> QnnMem_register done. status 0x0
+     0.0ms [  INFO ]  QnnDsp <I> QnnMem_register started. context 0x1 
+     0.0ms [  INFO ]  QnnDsp <I> QnnMem_register done. status 0x0
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute started. graph = 0x1
+     0.0ms [  INFO ]  QnnDsp <I> Graph qnn_partition_0 execution finished with result 0
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute done. status 0x0
+Inference complete.
+W0000 00:00:1755689730.597574   13796 text_enhancer_session_base.cc:392] PostProcess: GetAhwb() failed or not supported (ERROR: [./litert/cc/litert_tensor_buffer.h:207]). Falling back to CPU read path.
+I0000 00:00:1755689730.597592   13796 text_enhancer_session_base.cc:399] PostProcess: Using CPU fallback path (Read to vector).
+Output received: 512x512
+--- Run 1 Timing Summary ---
+Pre-processing Time: 7.37411 ms
+Inference Time (TextEnhancer_Run): 9.426 ms
+Post-processing Time: 1.02516 ms
+Total E2E Time (Pre + Run + Post): 17.8253 ms
+Output image 0 saved to output_run_images/output_0.png
+
+--- Run 2/10 ---
+Pre-processing with AHardwareBuffer...
+[Debug PreprocessImage-AHB] Entering function.
+[Debug PreprocessImage-AHB] Importing AHB...
+[Debug PreprocessImage-AHB] AHB imported successfully. Format: 37
+[Debug PreprocessImage-AHB] Descriptor set updated.
+[Debug PreprocessImage] Beginning one-time commands...
+[Debug PreprocessImage-AHB] Submitting commands...
+[Debug PreprocessImage-AHB] Commands submitted and awaited.
+[Debug PreprocessImage-AHB] Mapping readback buffer...
+[Debug mapBufferMemory] Calling vkMapMemory... (device=0xb400007220226e50, memory=0xb400007230228330, size=196608)
+[Debug mapBufferMemory] vkMapMemory returned. Result: 0
+[Debug mapBufferMemory] Returning mapped pointer: 0x742b2ff000
+[Debug PreprocessImage-AHB] Calling memcpy...
+[Debug PreprocessImage-AHB] memcpy complete. Time taken: 0.013 ms. 
+[Debug unmapBufferMemory] Calling vkUnmapMemory...
+[Debug unmapBufferMemory] vkUnmapMemory returned.
+[Debug PreprocessImage-AHB] Data read back from GPU.
+[Debug PreprocessImage-AHB] Cleaning up resources after success...
+[Debug PreprocessImage-AHB] Returning true from success path.
+Pre-processing (AHB) complete.
+I0000 00:00:1755689730.678166   13796 text_enhancer_session_base.cc:159] --- Per-Event Profiler Breakdown ---
+I0000 00:00:1755689730.678225   13796 text_enhancer_session_base.cc:163]   Event 0: [LiteRT::Run[buffer registration]], Time: 0.082 ms
+I0000 00:00:1755689730.678274   13796 text_enhancer_session_base.cc:163]   Event 1: [Invoke], Time: 8.323 ms
+I0000 00:00:1755689730.678292   13796 text_enhancer_session_base.cc:163]   Event 2: [DELEGATE], Time: 8.301 ms
+I0000 00:00:1755689730.678303   13796 text_enhancer_session_base.cc:163]   Event 3: [Invoke], Time: 4.29497e+06 ms
+I0000 00:00:1755689730.678313   13796 text_enhancer_session_base.cc:163]   Event 4: [LiteRT::Run[Buffer sync]], Time: 0.024 ms
+I0000 00:00:1755689730.678322   13796 text_enhancer_session_base.cc:168] ----------------------------------------
+I0000 00:00:1755689730.678331   13796 text_enhancer_session_base.cc:172] Total Child Event Time (Sum of Layers/Ops): 4.29498e+06 ms
+I0000 00:00:1755689730.678339   13796 text_enhancer_session_base.cc:174] Total 'Invoke' Time (Includes Overhead): 8.323 ms
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute started. graph = 0x1
+     0.0ms [  INFO ]  QnnDsp <I> Graph qnn_partition_0 execution finished with result 0
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute done. status 0x0
+Inference complete.
+W0000 00:00:1755689730.678384   13796 text_enhancer_session_base.cc:392] PostProcess: GetAhwb() failed or not supported (ERROR: [./litert/cc/litert_tensor_buffer.h:207]). Falling back to CPU read path.
+I0000 00:00:1755689730.678394   13796 text_enhancer_session_base.cc:399] PostProcess: Using CPU fallback path (Read to vector).
+Output received: 512x512
+--- Run 2 Timing Summary ---
+Pre-processing Time: 0.847552 ms
+Inference Time (TextEnhancer_Run): 8.323 ms
+Post-processing Time: 0.878646 ms
+Total E2E Time (Pre + Run + Post): 10.0492 ms
+Output image 1 saved to output_run_images/output_1.png
+
+--- Run 3/10 ---
+Pre-processing with AHardwareBuffer...
+[Debug PreprocessImage-AHB] Entering function.
+[Debug PreprocessImage-AHB] Importing AHB...
+[Debug PreprocessImage-AHB] AHB imported successfully. Format: 37
+[Debug PreprocessImage-AHB] Descriptor set updated.
+[Debug PreprocessImage] Beginning one-time commands...
+[Debug PreprocessImage-AHB] Submitting commands...
+[Debug PreprocessImage-AHB] Commands submitted and awaited.
+[Debug PreprocessImage-AHB] Mapping readback buffer...
+[Debug mapBufferMemory] Calling vkMapMemory... (device=0xb400007220226e50, memory=0xb400007230228330, size=196608)
+[Debug mapBufferMemory] vkMapMemory returned. Result: 0
+[Debug mapBufferMemory] Returning mapped pointer: 0x742b2ff000
+[Debug PreprocessImage-AHB] Calling memcpy...
+[Debug PreprocessImage-AHB] memcpy complete. Time taken: 0.022 ms. 
+[Debug unmapBufferMemory] Calling vkUnmapMemory...
+[Debug unmapBufferMemory] vkUnmapMemory returned.
+[Debug PreprocessImage-AHB] Data read back from GPU.
+[Debug PreprocessImage-AHB] Cleaning up resources after success...
+[Debug PreprocessImage-AHB] Returning true from success path.
+Pre-processing (AHB) complete.
+I0000 00:00:1755689730.764519   13796 text_enhancer_session_base.cc:159] --- Per-Event Profiler Breakdown ---
+I0000 00:00:1755689730.764584   13796 text_enhancer_session_base.cc:163]   Event 0: [LiteRT::Run[buffer registration]], Time: 0.094 ms
+I0000 00:00:1755689730.764619   13796 text_enhancer_session_base.cc:163]   Event 1: [Invoke], Time: 8.321 ms
+I0000 00:00:1755689730.764669   13796 text_enhancer_session_base.cc:163]   Event 2: [DELEGATE], Time: 8.299 ms
+I0000 00:00:1755689730.764688   13796 text_enhancer_session_base.cc:163]   Event 3: [Invoke], Time: 4.29497e+06 ms
+I0000 00:00:1755689730.764701   13796 text_enhancer_session_base.cc:163]   Event 4: [LiteRT::Run[Buffer sync]], Time: 0.023 ms
+I0000 00:00:1755689730.764711   13796 text_enhancer_session_base.cc:168] ----------------------------------------
+I0000 00:00:1755689730.764734   13796 text_enhancer_session_base.cc:172] Total Child Event Time (Sum of Layers/Ops): 4.29498e+06 ms
+I0000 00:00:1755689730.764743   13796 text_enhancer_session_base.cc:174] Total 'Invoke' Time (Includes Overhead): 8.321 ms
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute started. graph = 0x1
+     0.0ms [  INFO ]  QnnDsp <I> Graph qnn_partition_0 execution finished with result 0
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute done. status 0x0
+Inference complete.
+W0000 00:00:1755689730.764782   13796 text_enhancer_session_base.cc:392] PostProcess: GetAhwb() failed or not supported (ERROR: [./litert/cc/litert_tensor_buffer.h:207]). Falling back to CPU read path.
+I0000 00:00:1755689730.764812   13796 text_enhancer_session_base.cc:399] PostProcess: Using CPU fallback path (Read to vector).
+Output received: 512x512
+--- Run 3 Timing Summary ---
+Pre-processing Time: 6.54865 ms
+Inference Time (TextEnhancer_Run): 8.321 ms
+Post-processing Time: 0.920313 ms
+Total E2E Time (Pre + Run + Post): 15.79 ms
+Output image 2 saved to output_run_images/output_2.png
+
+--- Run 4/10 ---
+Pre-processing with AHardwareBuffer...
+[Debug PreprocessImage-AHB] Entering function.
+[Debug PreprocessImage-AHB] Importing AHB...
+[Debug PreprocessImage-AHB] AHB imported successfully. Format: 37
+[Debug PreprocessImage-AHB] Descriptor set updated.
+[Debug PreprocessImage] Beginning one-time commands...
+[Debug PreprocessImage-AHB] Submitting commands...
+[Debug PreprocessImage-AHB] Commands submitted and awaited.
+[Debug PreprocessImage-AHB] Mapping readback buffer...
+[Debug mapBufferMemory] Calling vkMapMemory... (device=0xb400007220226e50, memory=0xb400007230228330, size=196608)
+[Debug mapBufferMemory] vkMapMemory returned. Result: 0
+[Debug mapBufferMemory] Returning mapped pointer: 0x742b2ff000
+[Debug PreprocessImage-AHB] Calling memcpy...
+[Debug PreprocessImage-AHB] memcpy complete. Time taken: 0.024 ms. 
+[Debug unmapBufferMemory] Calling vkUnmapMemory...
+[Debug unmapBufferMemory] vkUnmapMemory returned.
+[Debug PreprocessImage-AHB] Data read back from GPU.
+[Debug PreprocessImage-AHB] Cleaning up resources after success...
+[Debug PreprocessImage-AHB] Returning true from success path.
+Pre-processing (AHB) complete.
+I0000 00:00:1755689730.852326   13796 text_enhancer_session_base.cc:159] --- Per-Event Profiler Breakdown ---
+I0000 00:00:1755689730.852394   13796 text_enhancer_session_base.cc:163]   Event 0: [LiteRT::Run[buffer registration]], Time: 0.307 ms
+I0000 00:00:1755689730.852467   13796 text_enhancer_session_base.cc:163]   Event 1: [Invoke], Time: 8.502 ms
+I0000 00:00:1755689730.852489   13796 text_enhancer_session_base.cc:163]   Event 2: [DELEGATE], Time: 8.419 ms
+I0000 00:00:1755689730.852500   13796 text_enhancer_session_base.cc:163]   Event 3: [Invoke], Time: 4.29497e+06 ms
+I0000 00:00:1755689730.852510   13796 text_enhancer_session_base.cc:163]   Event 4: [LiteRT::Run[Buffer sync]], Time: 0.022 ms
+I0000 00:00:1755689730.852519   13796 text_enhancer_session_base.cc:168] ----------------------------------------
+I0000 00:00:1755689730.852543   13796 text_enhancer_session_base.cc:172] Total Child Event Time (Sum of Layers/Ops): 4.29498e+06 ms
+I0000 00:00:1755689730.852552   13796 text_enhancer_session_base.cc:174] Total 'Invoke' Time (Includes Overhead): 8.502 ms
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute started. graph = 0x1
+     0.0ms [  INFO ]  QnnDsp <I> Graph qnn_partition_0 execution finished with result 0
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute done. status 0x0
+Inference complete.
+W0000 00:00:1755689730.852590   13796 text_enhancer_session_base.cc:392] PostProcess: GetAhwb() failed or not supported (ERROR: [./litert/cc/litert_tensor_buffer.h:207]). Falling back to CPU read path.
+I0000 00:00:1755689730.852600   13796 text_enhancer_session_base.cc:399] PostProcess: Using CPU fallback path (Read to vector).
+Output received: 512x512
+--- Run 4 Timing Summary ---
+Pre-processing Time: 6.79766 ms
+Inference Time (TextEnhancer_Run): 8.502 ms
+Post-processing Time: 0.945 ms
+Total E2E Time (Pre + Run + Post): 16.2447 ms
+Output image 3 saved to output_run_images/output_3.png
+
+--- Run 5/10 ---
+Pre-processing with AHardwareBuffer...
+[Debug PreprocessImage-AHB] Entering function.
+[Debug PreprocessImage-AHB] Importing AHB...
+[Debug PreprocessImage-AHB] AHB imported successfully. Format: 37
+[Debug PreprocessImage-AHB] Descriptor set updated.
+[Debug PreprocessImage] Beginning one-time commands...
+[Debug PreprocessImage-AHB] Submitting commands...
+[Debug PreprocessImage-AHB] Commands submitted and awaited.
+[Debug PreprocessImage-AHB] Mapping readback buffer...
+[Debug mapBufferMemory] Calling vkMapMemory... (device=0xb400007220226e50, memory=0xb400007230228330, size=196608)
+[Debug mapBufferMemory] vkMapMemory returned. Result: 0
+[Debug mapBufferMemory] Returning mapped pointer: 0x742b2ff000
+[Debug PreprocessImage-AHB] Calling memcpy...
+[Debug PreprocessImage-AHB] memcpy complete. Time taken: 0.016 ms. 
+[Debug unmapBufferMemory] Calling vkUnmapMemory...
+[Debug unmapBufferMemory] vkUnmapMemory returned.
+[Debug PreprocessImage-AHB] Data read back from GPU.
+[Debug PreprocessImage-AHB] Cleaning up resources after success...
+[Debug PreprocessImage-AHB] Returning true from success path.
+Pre-processing (AHB) complete.
+I0000 00:00:1755689730.939418   13796 text_enhancer_session_base.cc:159] --- Per-Event Profiler Breakdown ---
+I0000 00:00:1755689730.939472   13796 text_enhancer_session_base.cc:163]   Event 0: [LiteRT::Run[buffer registration]], Time: 0.084 ms
+I0000 00:00:1755689730.939511   13796 text_enhancer_session_base.cc:163]   Event 1: [Invoke], Time: 8.315 ms
+I0000 00:00:1755689730.939524   13796 text_enhancer_session_base.cc:163]   Event 2: [DELEGATE], Time: 8.294 ms
+I0000 00:00:1755689730.939570   13796 text_enhancer_session_base.cc:163]   Event 3: [Invoke], Time: 4.29497e+06 ms
+I0000 00:00:1755689730.939581   13796 text_enhancer_session_base.cc:163]   Event 4: [LiteRT::Run[Buffer sync]], Time: 0.022 ms
+I0000 00:00:1755689730.939591   13796 text_enhancer_session_base.cc:168] ----------------------------------------
+I0000 00:00:1755689730.939631   13796 text_enhancer_session_base.cc:172] Total Child Event Time (Sum of Layers/Ops): 4.29498e+06 ms
+I0000 00:00:1755689730.939641   13796 text_enhancer_session_base.cc:174] Total 'Invoke' Time (Includes Overhead): 8.315 ms
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute started. graph = 0x1
+     0.0ms [  INFO ]  QnnDsp <I> Graph qnn_partition_0 execution finished with result 0
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute done. status 0x0
+Inference complete.
+W0000 00:00:1755689730.939667   13796 text_enhancer_session_base.cc:392] PostProcess: GetAhwb() failed or not supported (ERROR: [./litert/cc/litert_tensor_buffer.h:207]). Falling back to CPU read path.
+I0000 00:00:1755689730.939690   13796 text_enhancer_session_base.cc:399] PostProcess: Using CPU fallback path (Read to vector).
+Output received: 512x512
+--- Run 5 Timing Summary ---
+Pre-processing Time: 6.61297 ms
+Inference Time (TextEnhancer_Run): 8.315 ms
+Post-processing Time: 0.896771 ms
+Total E2E Time (Pre + Run + Post): 15.8247 ms
+Output image 4 saved to output_run_images/output_4.png
+
+--- Run 6/10 ---
+Pre-processing with AHardwareBuffer...
+[Debug PreprocessImage-AHB] Entering function.
+[Debug PreprocessImage-AHB] Importing AHB...
+[Debug PreprocessImage-AHB] AHB imported successfully. Format: 37
+[Debug PreprocessImage-AHB] Descriptor set updated.
+[Debug PreprocessImage] Beginning one-time commands...
+[Debug PreprocessImage-AHB] Submitting commands...
+[Debug PreprocessImage-AHB] Commands submitted and awaited.
+[Debug PreprocessImage-AHB] Mapping readback buffer...
+[Debug mapBufferMemory] Calling vkMapMemory... (device=0xb400007220226e50, memory=0xb400007230228330, size=196608)
+[Debug mapBufferMemory] vkMapMemory returned. Result: 0
+[Debug mapBufferMemory] Returning mapped pointer: 0x742b2ff000
+[Debug PreprocessImage-AHB] Calling memcpy...
+[Debug PreprocessImage-AHB] memcpy complete. Time taken: 0.049 ms. 
+[Debug unmapBufferMemory] Calling vkUnmapMemory...
+[Debug unmapBufferMemory] vkUnmapMemory returned.
+[Debug PreprocessImage-AHB] Data read back from GPU.
+[Debug PreprocessImage-AHB] Cleaning up resources after success...
+[Debug PreprocessImage-AHB] Returning true from success path.
+Pre-processing (AHB) complete.
+I0000 00:00:1755689731.052768   13796 text_enhancer_session_base.cc:159] --- Per-Event Profiler Breakdown ---
+I0000 00:00:1755689731.052831   13796 text_enhancer_session_base.cc:163]   Event 0: [LiteRT::Run[buffer registration]], Time: 0.265 ms
+I0000 00:00:1755689731.052864   13796 text_enhancer_session_base.cc:163]   Event 1: [Invoke], Time: 8.493 ms
+I0000 00:00:1755689731.052916   13796 text_enhancer_session_base.cc:163]   Event 2: [DELEGATE], Time: 8.426 ms
+I0000 00:00:1755689731.052938   13796 text_enhancer_session_base.cc:163]   Event 3: [Invoke], Time: 4.29497e+06 ms
+I0000 00:00:1755689731.052952   13796 text_enhancer_session_base.cc:163]   Event 4: [LiteRT::Run[Buffer sync]], Time: 0.025 ms
+I0000 00:00:1755689731.052981   13796 text_enhancer_session_base.cc:168] ----------------------------------------
+I0000 00:00:1755689731.052990   13796 text_enhancer_session_base.cc:172] Total Child Event Time (Sum of Layers/Ops): 4.29498e+06 ms
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute started. graph = 0x1
+     0.0ms [  INFO ]  QnnDsp <I> Graph qnn_partition_0 execution finished with result 0
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute done. status 0x0
+Inference complete.
+I0000 00:00:1755689731.053001   13796 text_enhancer_session_base.cc:174] Total 'Invoke' Time (Includes Overhead): 8.493 ms
+W0000 00:00:1755689731.053044   13796 text_enhancer_session_base.cc:392] PostProcess: GetAhwb() failed or not supported (ERROR: [./litert/cc/litert_tensor_buffer.h:207]). Falling back to CPU read path.
+I0000 00:00:1755689731.053057   13796 text_enhancer_session_base.cc:399] PostProcess: Using CPU fallback path (Read to vector).
+Output received: 512x512
+--- Run 6 Timing Summary ---
+Pre-processing Time: 32.8759 ms
+Inference Time (TextEnhancer_Run): 8.493 ms
+Post-processing Time: 1.18984 ms
+Total E2E Time (Pre + Run + Post): 42.5588 ms
+Output image 5 saved to output_run_images/output_5.png
+
+--- Run 7/10 ---
+Pre-processing with AHardwareBuffer...
+[Debug PreprocessImage-AHB] Entering function.
+[Debug PreprocessImage-AHB] Importing AHB...
+[Debug PreprocessImage-AHB] AHB imported successfully. Format: 37
+[Debug PreprocessImage-AHB] Descriptor set updated.
+[Debug PreprocessImage] Beginning one-time commands...
+[Debug PreprocessImage-AHB] Submitting commands...
+[Debug PreprocessImage-AHB] Commands submitted and awaited.
+[Debug PreprocessImage-AHB] Mapping readback buffer...
+[Debug mapBufferMemory] Calling vkMapMemory... (device=0xb400007220226e50, memory=0xb400007230228330, size=196608)
+[Debug mapBufferMemory] vkMapMemory returned. Result: 0
+[Debug mapBufferMemory] Returning mapped pointer: 0x742b2ff000
+[Debug PreprocessImage-AHB] Calling memcpy...
+[Debug PreprocessImage-AHB] memcpy complete. Time taken: 0.018 ms. 
+[Debug unmapBufferMemory] Calling vkUnmapMemory...
+[Debug unmapBufferMemory] vkUnmapMemory returned.
+[Debug PreprocessImage-AHB] Data read back from GPU.
+[Debug PreprocessImage-AHB] Cleaning up resources after success...
+[Debug PreprocessImage-AHB] Returning true from success path.
+Pre-processing (AHB) complete.
+I0000 00:00:1755689731.142871   13796 text_enhancer_session_base.cc:159] --- Per-Event Profiler Breakdown ---
+I0000 00:00:1755689731.142944   13796 text_enhancer_session_base.cc:163]   Event 0: [LiteRT::Run[buffer registration]], Time: 0.125 ms
+I0000 00:00:1755689731.143021   13796 text_enhancer_session_base.cc:163]   Event 1: [Invoke], Time: 8.477 ms
+I0000 00:00:1755689731.143039   13796 text_enhancer_session_base.cc:163]   Event 2: [DELEGATE], Time: 8.365 ms
+I0000 00:00:1755689731.143050   13796 text_enhancer_session_base.cc:163]   Event 3: [Invoke], Time: 4.29497e+06 ms
+I0000 00:00:1755689731.143060   13796 text_enhancer_session_base.cc:163]   Event 4: [LiteRT::Run[Buffer sync]], Time: 0.021 ms
+I0000 00:00:1755689731.143087   13796 text_enhancer_session_base.cc:168] ----------------------------------------
+I0000 00:00:1755689731.143095   13796 text_enhancer_session_base.cc:172] Total Child Event Time (Sum of Layers/Ops): 4.29498e+06 ms
+I0000 00:00:1755689731.143103   13796 text_enhancer_session_base.cc:174] Total 'Invoke' Time (Includes Overhead): 8.477 ms
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute started. graph = 0x1
+     0.0ms [  INFO ]  QnnDsp <I> Graph qnn_partition_0 execution finished with result 0
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute done. status 0x0
+Inference complete.
+W0000 00:00:1755689731.143146   13796 text_enhancer_session_base.cc:392] PostProcess: GetAhwb() failed or not supported (ERROR: [./litert/cc/litert_tensor_buffer.h:207]). Falling back to CPU read path.
+I0000 00:00:1755689731.143159   13796 text_enhancer_session_base.cc:399] PostProcess: Using CPU fallback path (Read to vector).
+Output received: 512x512
+--- Run 7 Timing Summary ---
+Pre-processing Time: 6.81047 ms
+Inference Time (TextEnhancer_Run): 8.477 ms
+Post-processing Time: 1.00203 ms
+Total E2E Time (Pre + Run + Post): 16.2895 ms
+Output image 6 saved to output_run_images/output_6.png
+
+--- Run 8/10 ---
+Pre-processing with AHardwareBuffer...
+[Debug PreprocessImage-AHB] Entering function.
+[Debug PreprocessImage-AHB] Importing AHB...
+[Debug PreprocessImage-AHB] AHB imported successfully. Format: 37
+[Debug PreprocessImage-AHB] Descriptor set updated.
+[Debug PreprocessImage] Beginning one-time commands...
+[Debug PreprocessImage-AHB] Submitting commands...
+[Debug PreprocessImage-AHB] Commands submitted and awaited.
+[Debug PreprocessImage-AHB] Mapping readback buffer...
+[Debug mapBufferMemory] Calling vkMapMemory... (device=0xb400007220226e50, memory=0xb400007230228330, size=196608)
+[Debug mapBufferMemory] vkMapMemory returned. Result: 0
+[Debug mapBufferMemory] Returning mapped pointer: 0x742b2ff000
+[Debug PreprocessImage-AHB] Calling memcpy...
+[Debug PreprocessImage-AHB] memcpy complete. Time taken: 0.014 ms. 
+[Debug unmapBufferMemory] Calling vkUnmapMemory...
+[Debug unmapBufferMemory] vkUnmapMemory returned.
+[Debug PreprocessImage-AHB] Data read back from GPU.
+[Debug PreprocessImage-AHB] Cleaning up resources after success...
+[Debug PreprocessImage-AHB] Returning true from success path.
+Pre-processing (AHB) complete.
+I0000 00:00:1755689731.229836   13796 text_enhancer_session_base.cc:159] --- Per-Event Profiler Breakdown ---
+I0000 00:00:1755689731.229893   13796 text_enhancer_session_base.cc:163]   Event 0: [LiteRT::Run[buffer registration]], Time: 0.08 ms
+I0000 00:00:1755689731.229921   13796 text_enhancer_session_base.cc:163]   Event 1: [Invoke], Time: 8.486 ms
+I0000 00:00:1755689731.229935   13796 text_enhancer_session_base.cc:163]   Event 2: [DELEGATE], Time: 8.465 ms
+I0000 00:00:1755689731.229976   13796 text_enhancer_session_base.cc:163]   Event 3: [Invoke], Time: 4.29497e+06 ms
+I0000 00:00:1755689731.229987   13796 text_enhancer_session_base.cc:163]   Event 4: [LiteRT::Run[Buffer sync]], Time: 0.022 ms
+I0000 00:00:1755689731.229996   13796 text_enhancer_session_base.cc:168] ----------------------------------------
+I0000 00:00:1755689731.230004   13796 text_enhancer_session_base.cc:172] Total Child Event Time (Sum of Layers/Ops): 4.29498e+06 ms
+I0000 00:00:1755689731.230025   13796 text_enhancer_session_base.cc:174] Total 'Invoke' Time (Includes Overhead): 8.486 ms
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute started. graph = 0x1
+     0.0ms [  INFO ]  QnnDsp <I> Graph qnn_partition_0 execution finished with result 0
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute done. status 0x0
+Inference complete.
+W0000 00:00:1755689731.230050   13796 text_enhancer_session_base.cc:392] PostProcess: GetAhwb() failed or not supported (ERROR: [./litert/cc/litert_tensor_buffer.h:207]). Falling back to CPU read path.
+I0000 00:00:1755689731.230070   13796 text_enhancer_session_base.cc:399] PostProcess: Using CPU fallback path (Read to vector).
+Output received: 512x512
+--- Run 8 Timing Summary ---
+Pre-processing Time: 6.72641 ms
+Inference Time (TextEnhancer_Run): 8.486 ms
+Post-processing Time: 0.933229 ms
+Total E2E Time (Pre + Run + Post): 16.1456 ms
+Output image 7 saved to output_run_images/output_7.png
+
+--- Run 9/10 ---
+Pre-processing with AHardwareBuffer...
+[Debug PreprocessImage-AHB] Entering function.
+[Debug PreprocessImage-AHB] Importing AHB...
+[Debug PreprocessImage-AHB] AHB imported successfully. Format: 37
+[Debug PreprocessImage-AHB] Descriptor set updated.
+[Debug PreprocessImage] Beginning one-time commands...
+[Debug PreprocessImage-AHB] Submitting commands...
+[Debug PreprocessImage-AHB] Commands submitted and awaited.
+[Debug PreprocessImage-AHB] Mapping readback buffer...
+[Debug mapBufferMemory] Calling vkMapMemory... (device=0xb400007220226e50, memory=0xb400007230228330, size=196608)
+[Debug mapBufferMemory] vkMapMemory returned. Result: 0
+[Debug mapBufferMemory] Returning mapped pointer: 0x742b2ff000
+[Debug PreprocessImage-AHB] Calling memcpy...
+[Debug PreprocessImage-AHB] memcpy complete. Time taken: 0.017 ms. 
+[Debug unmapBufferMemory] Calling vkUnmapMemory...
+[Debug unmapBufferMemory] vkUnmapMemory returned.
+[Debug PreprocessImage-AHB] Data read back from GPU.
+[Debug PreprocessImage-AHB] Cleaning up resources after success...
+[Debug PreprocessImage-AHB] Returning true from success path.
+Pre-processing (AHB) complete.
+I0000 00:00:1755689731.316888   13796 text_enhancer_session_base.cc:159] --- Per-Event Profiler Breakdown ---
+I0000 00:00:1755689731.316955   13796 text_enhancer_session_base.cc:163]   Event 0: [LiteRT::Run[buffer registration]], Time: 0.257 ms
+I0000 00:00:1755689731.316976   13796 text_enhancer_session_base.cc:163]   Event 1: [Invoke], Time: 8.448 ms
+I0000 00:00:1755689731.317034   13796 text_enhancer_session_base.cc:163]   Event 2: [DELEGATE], Time: 8.362 ms
+I0000 00:00:1755689731.317047   13796 text_enhancer_session_base.cc:163]   Event 3: [Invoke], Time: 4.29497e+06 ms
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute started. graph = 0x1
+     0.0ms [  INFO ]  QnnDsp <I> Graph qnn_partition_0 execution finished with result 0
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute done. status 0x0
+Inference complete.
+I0000 00:00:1755689731.317060   13796 text_enhancer_session_base.cc:163]   Event 4: [LiteRT::Run[Buffer sync]], Time: 0.022 ms
+I0000 00:00:1755689731.317089   13796 text_enhancer_session_base.cc:168] ----------------------------------------
+I0000 00:00:1755689731.317097   13796 text_enhancer_session_base.cc:172] Total Child Event Time (Sum of Layers/Ops): 4.29498e+06 ms
+I0000 00:00:1755689731.317106   13796 text_enhancer_session_base.cc:174] Total 'Invoke' Time (Includes Overhead): 8.448 ms
+W0000 00:00:1755689731.317132   13796 text_enhancer_session_base.cc:392] PostProcess: GetAhwb() failed or not supported (ERROR: [./litert/cc/litert_tensor_buffer.h:207]). Falling back to CPU read path.
+I0000 00:00:1755689731.317149   13796 text_enhancer_session_base.cc:399] PostProcess: Using CPU fallback path (Read to vector).
+Output received: 512x512
+--- Run 9 Timing Summary ---
+Pre-processing Time: 6.68714 ms
+Inference Time (TextEnhancer_Run): 8.448 ms
+Post-processing Time: 0.937032 ms
+Total E2E Time (Pre + Run + Post): 16.0722 ms
+Output image 8 saved to output_run_images/output_8.png
+
+--- Run 10/10 ---
+Pre-processing with AHardwareBuffer...
+[Debug PreprocessImage-AHB] Entering function.
+[Debug PreprocessImage-AHB] Importing AHB...
+[Debug PreprocessImage-AHB] AHB imported successfully. Format: 37
+[Debug PreprocessImage-AHB] Descriptor set updated.
+[Debug PreprocessImage] Beginning one-time commands...
+[Debug PreprocessImage-AHB] Submitting commands...
+[Debug PreprocessImage-AHB] Commands submitted and awaited.
+[Debug PreprocessImage-AHB] Mapping readback buffer...
+[Debug mapBufferMemory] Calling vkMapMemory... (device=0xb400007220226e50, memory=0xb400007230228330, size=196608)
+[Debug mapBufferMemory] vkMapMemory returned. Result: 0
+[Debug mapBufferMemory] Returning mapped pointer: 0x742b2ff000
+[Debug PreprocessImage-AHB] Calling memcpy...
+[Debug PreprocessImage-AHB] memcpy complete. Time taken: 0.015 ms. 
+[Debug unmapBufferMemory] Calling vkUnmapMemory...
+[Debug unmapBufferMemory] vkUnmapMemory returned.
+[Debug PreprocessImage-AHB] Data read back from GPU.
+[Debug PreprocessImage-AHB] Cleaning up resources after success...
+[Debug PreprocessImage-AHB] Returning true from success path.
+Pre-processing (AHB) complete.
+I0000 00:00:1755689731.403422   13796 text_enhancer_session_base.cc:159] --- Per-Event Profiler Breakdown ---
+I0000 00:00:1755689731.403482   13796 text_enhancer_session_base.cc:163]   Event 0: [LiteRT::Run[buffer registration]], Time: 0.075 ms
+I0000 00:00:1755689731.403515   13796 text_enhancer_session_base.cc:163]   Event 1: [Invoke], Time: 8.337 ms
+I0000 00:00:1755689731.403529   13796 text_enhancer_session_base.cc:163]   Event 2: [DELEGATE], Time: 8.315 ms
+I0000 00:00:1755689731.403540   13796 text_enhancer_session_base.cc:163]   Event 3: [Invoke], Time: 4.29497e+06 ms
+I0000 00:00:1755689731.403580   13796 text_enhancer_session_base.cc:163]   Event 4: [LiteRT::Run[Buffer sync]], Time: 0.021 ms
+I0000 00:00:1755689731.403593   13796 text_enhancer_session_base.cc:168] ----------------------------------------
+I0000 00:00:1755689731.403600   13796 text_enhancer_session_base.cc:172] Total Child Event Time (Sum of Layers/Ops): 4.29498e+06 ms
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute started. graph = 0x1
+     0.0ms [  INFO ]  QnnDsp <I> Graph qnn_partition_0 execution finished with result 0
+     0.0ms [  INFO ]  QnnDsp <I> QnnGraph_execute done. status 0x0
+Inference complete.
+I0000 00:00:1755689731.403609   13796 text_enhancer_session_base.cc:174] Total 'Invoke' Time (Includes Overhead): 8.337 ms
+W0000 00:00:1755689731.403658   13796 text_enhancer_session_base.cc:392] PostProcess: GetAhwb() failed or not supported (ERROR: [./litert/cc/litert_tensor_buffer.h:207]). Falling back to CPU read path.
+I0000 00:00:1755689731.403669   13796 text_enhancer_session_base.cc:399] PostProcess: Using CPU fallback path (Read to vector).
+Output received: 512x512
+--- Run 10 Timing Summary ---
+Pre-processing Time: 6.69995 ms
+Inference Time (TextEnhancer_Run): 8.337 ms
+Post-processing Time: 0.944479 ms
+Total E2E Time (Pre + Run + Post): 15.9814 ms
+Output image 9 saved to output_run_images/output_9.png
+
+--- Timing Statistics (10 runs) ---
+                   Min (ms)   Max (ms)   Avg (ms)
+-------------------------------------------------
+Pre-processing:       0.85      32.88       8.80
+Inference (Run):      8.31       9.43       8.51
+Post-processing:      0.88       1.19       0.97
+-------------------------------------------------
+Total E2E (Avg): 18.28 ms
+-------------------------------------------------
+
+I0000 00:00:1755689731.480488   13796 accelerator_registry.cc:40] DestroyAccelerator: ptr=0xb4000072d0231390, name=CpuAccelerator
+I0000 00:00:1755689731.480608   13796 accelerator_registry.cc:40] DestroyAccelerator: ptr=0xb4000072d0231a90, name=GPU OpenCL
+I0000 00:00:1755689731.480628   13796 accelerator_registry.cc:40] DestroyAccelerator: ptr=0xb4000072d02319b0, name=NpuAccelerator
+     0.0ms [  INFO ]  QnnDsp <I> QnnMem_deRegister started
+     0.0ms [  INFO ]  QnnDsp <I> QnnMem_deRegister done. status 0x0
+     0.0ms [  INFO ]  QnnDsp <I> QnnMem_deRegister started
+     0.0ms [  INFO ]  QnnDsp <I> QnnMem_deRegister done. status 0x0
+     0.0ms [  INFO ]  QnnDsp <I> QnnContext_free started. context = 0x1
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [WARNING]  QnnDsp <W> This META does not have Alloc2 Support
+     0.0ms [  INFO ]  QnnDsp <I> Graph Rpc memory was not initialized for graph 1
+     0.0ms [  INFO ]  QnnDsp <I> Number of existing contexts: 0, graphs: 0
+     0.0ms [  INFO ]  QnnDsp <I> QnnContext_free done successfully.
+I0000 00:00:1755689731.481272   13796 text_enhancer_session_base.cc:194] TextEnhancer_Shutdown complete.
+Session shut down. Exiting.
+     0.0ms [  INFO ]  QnnDsp <I> htpPerfInfrastructureDestroyPowerConfigId started for powerConfigId: 1483690296
+
+     0.0ms [  INFO ]  QnnDsp <I> htpPerfInfrastructureDestroyPowerConfigId done. status 0x0
+
+Pulling results from 10-run benchmark...
+Pulling 10 run output images from /data/local/tmp/text_enhancer_android/output_run_images to ./android_output_npu_vulkan_uint8_vst/
+/data/local/tmp/text_enhancer_android/output_run_images/./:...iles pulled, 0 skipped. 34.3 MB/s (4239910 bytes in 0.118s
+Pulled run images.
+Done. Results are in ./android_output_npu_vulkan_uint8_vst/

@@ -1,5 +1,3 @@
-#include "litert/samples/text_enhancer/image_processing/vulkan_image_processor.h"
-
 #include <chrono>  // <-- ADDED for benchmarking
 #include <cstring>
 #include <iostream>
@@ -7,6 +5,7 @@
 #include <vector>
 
 #include "vulkan/vulkan_utils.h"  // Our new utils header
+#include "vulkan_image_processor.h"
 
 #ifdef __ANDROID__
 #include <android/hardware_buffer.h>
