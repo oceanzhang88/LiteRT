@@ -1,5 +1,4 @@
-#ifndef THIRD_PARTY_ODML_LITERT_LITERT_SAMPLES_SUPER_RESOLUTION_IMAGE_UTILS_H_
-#define THIRD_PARTY_ODML_LITERT_LITERT_SAMPLES_SUPER_RESOLUTION_IMAGE_UTILS_H_
+#pragma once
 
 #include <string>
 
@@ -78,5 +77,3 @@ void FreeAhb(AHardwareBuffer* buffer);
 // ------------------------------------------------
 
 }  // namespace ImageUtils
-
-#endif  // THIRD_PARTY_ODML_LITERT_LITERT_SAMPLES_SUPER_RESOLUTION_IMAGE_UTILS_H_

@@ -52,9 +52,9 @@ TextEnhancerSession* TextEnhancer_Initialize(const TextEnhancerOptions& options)
  * @brief Runs the inference (GPU Backend).
  */
 TextEnhancerStatus TextEnhancer_Run(TextEnhancerSession* session, float* inference_time_ms) {
-    // Create a lambda for the backend-specific run call
-    auto run_fn = [&]() {
-        bool async = true;
+    // Create a std::function object that matches the base function's signature.
+    // This replaces 'auto run_fn = ...'
+    auto run_fn = [&]() -> litert::Expected<void> {
         return session->compiled_model->Run(*session->input_buffers, *session->output_buffers);
     };
 

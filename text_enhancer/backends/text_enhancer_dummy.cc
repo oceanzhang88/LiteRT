@@ -1,7 +1,7 @@
 #include <new>
 
 // --- RENAMED: Include new API header ---
-#include "litert/samples/text_enhancer/text_enhancer_api.h"
+#include "text_enhancer/text_enhancer_api.h"
 
 #ifdef __ANDROID__
 #include "android/hardware_buffer.h"

@@ -1,5 +1,4 @@
-#ifndef SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_COMPUTE_PIPELINE_H_
-#define SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_COMPUTE_PIPELINE_H_
+#pragma once
 
 #include <vulkan/vulkan.h>
 
@@ -42,5 +41,3 @@ class VulkanComputePipeline {
     VkDescriptorSetLayout descriptor_set_layout_ = VK_NULL_HANDLE;
     VkShaderModule compute_shader_module_ = VK_NULL_HANDLE;
 };
-
-#endif  // SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_COMPUTE_PIPELINE_H_

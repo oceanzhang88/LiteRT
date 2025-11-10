@@ -31,11 +31,11 @@ typedef enum {
  */
 typedef struct {
     const char* model_path;
-    const char* compute_shader_path;  // Optional, for Vulkan
-    const char* accelerator_name;     // "cpu", "gpu", "npu", "dummy"
-    int input_width;                  // Required input width
-    int input_height;                 // Required input height
-    bool use_int8_preprocessor = false; // Default to float
+    const char* compute_shader_path;     // Optional, for Vulkan
+    const char* accelerator_name;        // "cpu", "gpu", "npu", "dummy"
+    int input_width;                     // Required input width
+    int input_height;                    // Required input height
+    bool use_int8_preprocessor = false;  // Default to float
 } TextEnhancerOptions;
 
 /**
@@ -71,7 +71,8 @@ TextEnhancerSession* TextEnhancer_Initialize(const TextEnhancerOptions& options)
  * @return kTextEnhancerOk on success.
  */
 #ifdef __ANDROID__
-TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session, AHardwareBuffer* buffer);
+TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
+                                               AHardwareBuffer* buffer);
 #endif
 
 /**

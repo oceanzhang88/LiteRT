@@ -1,5 +1,4 @@
-#ifndef SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_CONTEXT_H_
-#define SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_CONTEXT_H_
+#pragma once
 
 #include <vulkan/vulkan.h>
 
@@ -43,5 +42,3 @@ private:
     // Resource management
     VkCommandPool command_pool_ = VK_NULL_HANDLE;
 };
-
-#endif // SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_CONTEXT_H_

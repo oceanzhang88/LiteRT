@@ -53,7 +53,6 @@ TextEnhancerSession* TextEnhancer_Initialize_Base(const TextEnhancerOptions& opt
     LOG(INFO) << "[Debug TextEnhancer_Initialize] Model Input: " << session->model_input_width
               << "x" << session->model_input_height << "x" << session->model_input_channels;
 
-    // --- MODIFIED: (Your excellent idea) ---
     // Check the model's actual input type and resize the correct buffer
     size_t num_elements =
         session->model_input_width * session->model_input_height * session->model_input_channels;
@@ -69,13 +68,11 @@ TextEnhancerSession* TextEnhancer_Initialize_Base(const TextEnhancerOptions& opt
         session->is_int8_input = false;
         session->preprocessed_data_float.resize(num_elements);
     }
-    // --- END MODIFIED ---
 
     if (session->preprocessor_type == TextEnhancerSession::PreprocessorType::kVulkan) {
         LOG(INFO) << "Initializing Vulkan Pre-processor...";
         session->vulkan_processor = std::make_unique<VulkanImageProcessor>();
 
-        // --- MODIFIED ---
         // Pass the *actual* model input requirement to Vulkan processor.
         // This MUST match the `is_int8_input` flag from the model check.
         if (options.use_int8_preprocessor != session->is_int8_input) {
@@ -144,7 +141,6 @@ TextEnhancerStatus TextEnhancer_Run_Base(TextEnhancerSession* session, float* in
     }
 
     // --- Profiler Event Processing ---
-    // (No changes in this function)
     if (profiler) {
         LITERT_ASSIGN_OR_ABORT(auto events, profiler.GetEvents());
         double total_invoke_ms = 0.0;
@@ -176,7 +172,6 @@ TextEnhancerStatus TextEnhancer_Run_Base(TextEnhancerSession* session, float* in
     } else if (inference_time_ms) {
         *inference_time_ms = -1.0;
     }
-    // --- END: Profiler Event Processing ---
 
     return kTextEnhancerOk;
 }
@@ -201,7 +196,7 @@ TextEnhancerStatus TextEnhancer_PreProcess(TextEnhancerSession* session, const u
     if (!session || !rgb_data) return kTextEnhancerInputError;
 
     const int kInputChannels = 4;
-    litert::Expected<void> status;  // --- ADDED ---
+    litert::Expected<void> status;  
 
     if (session->preprocessor_type == TextEnhancerSession::PreprocessorType::kVulkan) {
         if (!session->vulkan_processor) {
@@ -210,7 +205,6 @@ TextEnhancerStatus TextEnhancer_PreProcess(TextEnhancerSession* session, const u
         }
         auto vk_processor = session->vulkan_processor.get();
 
-        // --- MODIFIED ---
         // Get a void* pointer to the correct buffer based on the flag
         void* vulkan_output_ptr = nullptr;
         if (session->is_int8_input) {
@@ -218,7 +212,6 @@ TextEnhancerStatus TextEnhancer_PreProcess(TextEnhancerSession* session, const u
         } else {
             vulkan_output_ptr = session->preprocessed_data_float.data();
         }
-        // --- END MODIFIED ---
 
         if (!vk_processor->PreprocessImage(rgb_data, session->original_input_width,
                                            session->original_input_height, kInputChannels,
@@ -238,7 +231,6 @@ TextEnhancerStatus TextEnhancer_PreProcess(TextEnhancerSession* session, const u
             session->model_input_width, session->model_input_height, session->model_input_channels);
     }
 
-    // --- MODIFIED ---
     // Write from the correct, strongly-typed buffer.
     // The `absl::MakeConstSpan` will now create a span of the correct
     // type AND byte size (e.g., 196608 bytes for int8, 786432 for float).
@@ -249,7 +241,6 @@ TextEnhancerStatus TextEnhancer_PreProcess(TextEnhancerSession* session, const u
         status = (*session->input_buffers)[0].Write(
             absl::MakeConstSpan(session->preprocessed_data_float));
     }
-    // --- END MODIFIED ---
 
     if (!status) {
         LOG(ERROR) << "Failed to write to input buffer: " << status.Error().Message();
@@ -279,7 +270,6 @@ TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
 
     auto vk_processor = session->vulkan_processor.get();
 
-    // --- MODIFIED ---
     // Get a void* pointer to the correct buffer
     void* vulkan_output_ptr = nullptr;
     if (session->is_int8_input) {
@@ -287,7 +277,6 @@ TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
     } else {
         vulkan_output_ptr = session->preprocessed_data_float.data();
     }
-    // --- END MODIFIED ---
 
     if (!vk_processor->PreprocessImage(in_buffer, session->original_input_width,
                                        session->original_input_height, vulkan_output_ptr)) {
@@ -295,7 +284,6 @@ TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
         return kTextEnhancerRuntimeError;
     }
 
-    // --- MODIFIED ---
     // Write from the correct, strongly-typed buffer.
     // This is now type-safe and the byte size is implicitly correct.
     litert::Expected<void> status;
@@ -306,7 +294,6 @@ TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
         status = (*session->input_buffers)[0].Write(
             absl::MakeConstSpan(session->preprocessed_data_float));
     }
-    // --- END MODIFIED ---
 
     if (!status) {
         LOG(ERROR) << "Failed to write to input buffer: " << status.Error().Message();
@@ -323,7 +310,6 @@ TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
 TextEnhancerStatus TextEnhancer_GetPreprocessedData(TextEnhancerSession* session, uint8_t** data) {
     if (!session || !data) return kTextEnhancerInputError;
 
-    // --- MODIFIED ---
     // Return a pointer to whichever buffer is active, cast to uint8_t*
     if (session->is_int8_input) {
         if (session->preprocessed_data_uint8.empty()) {
@@ -338,14 +324,12 @@ TextEnhancerStatus TextEnhancer_GetPreprocessedData(TextEnhancerSession* session
         }
         *data = reinterpret_cast<uint8_t*>(session->preprocessed_data_float.data());
     }
-    // --- END MODIFIED ---
 
     return kTextEnhancerOk;
 }
 
 /**
  * @brief Gets the output data. (Common)
- * --- MODIFIED ---
  */
 TextEnhancerStatus TextEnhancer_PostProcess(TextEnhancerSession* session,
                                             TextEnhancerOutput& output) {
@@ -359,7 +343,6 @@ TextEnhancerStatus TextEnhancer_PostProcess(TextEnhancerSession* session,
 #ifdef __ANDROID__
     output.output_buffer = nullptr;
 #endif
-    // --- End Init ---
 
     if ((*session->output_buffers)[0].HasEvent()) {
         LITERT_ASSIGN_OR_ABORT(auto event, (*session->output_buffers)[0].GetEvent());
@@ -367,7 +350,6 @@ TextEnhancerStatus TextEnhancer_PostProcess(TextEnhancerSession* session,
     }
 
 #ifdef __ANDROID__
-    // --- NEW: Android AHB Path (Zero-Copy) ---
     // Try to get the AHardwareBuffer directly from the output tensor.
     auto ahb_expected = (*session->output_buffers)[0].GetAhwb();
 
@@ -392,7 +374,6 @@ TextEnhancerStatus TextEnhancer_PostProcess(TextEnhancerSession* session,
         LOG(WARNING) << "PostProcess: GetAhwb() failed or not supported ("
                      << ahb_expected.Error().Message() << "). Falling back to CPU read path.";
     }
-    // --- END: Android AHB Path ---
 #endif
 
     // --- Fallback/Default CPU Read Path ---
@@ -409,10 +390,8 @@ TextEnhancerStatus TextEnhancer_PostProcess(TextEnhancerSession* session,
             return kTextEnhancerRuntimeError;
         }
 
-        // --- MODIFICATION ---
         size_t output_bytes = output_size * sizeof(uint8_t);
         uint8_t* data_ptr = new (std::nothrow) uint8_t[output_bytes];
-        // --- END MODIFICATION ---
 
         if (!data_ptr) {
             LOG(ERROR) << "Failed to allocate memory for output data.";
@@ -429,10 +408,8 @@ TextEnhancerStatus TextEnhancer_PostProcess(TextEnhancerSession* session,
             return kTextEnhancerRuntimeError;
         }
 
-        // --- MODIFICATION ---
         size_t output_bytes = output_size * sizeof(float);
         uint8_t* data_ptr = new (std::nothrow) uint8_t[output_bytes];
-        // --- END MODIFICATION ---
 
         if (!data_ptr) {
             LOG(ERROR) << "Failed to allocate memory for output data.";
@@ -453,7 +430,7 @@ TextEnhancerStatus TextEnhancer_PostProcess(TextEnhancerSession* session,
 
 /**
  * @brief Frees the output data buffer. (Common)
- * --- MODIFIED ---
+ * 
  */
 void TextEnhancer_FreeOutputData(TextEnhancerOutput& output) {
 #ifdef __ANDROID__
@@ -467,9 +444,7 @@ void TextEnhancer_FreeOutputData(TextEnhancerOutput& output) {
 
     // --- Original CPU buffer cleanup ---
     if (output.data) {
-        // --- NOTE ---
         // This assumes the output is always float, matching PostProcess.
-        // --- END NOTE ---
         // float* data_to_free = reinterpret_cast<float*>(output.data);
         delete[] output.data;
         output.data = nullptr;

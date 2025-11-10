@@ -1,5 +1,4 @@
-#ifndef SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_UTILS_H_
-#define SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_UTILS_H_
+#pragma once
 
 #include <vector>
 #include <string>
@@ -93,5 +92,3 @@ void UnmapBufferMemory(VkDevice device,
                        VkDeviceMemory buffer_memory);
 
 } // namespace VulkanUtils
-
-#endif // SUPER_RESOLUTION_IMAGE_PROCESSING_VULKAN_VULKAN_UTILS_H_

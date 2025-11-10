@@ -3,14 +3,10 @@
 #include <stdexcept>
 #include <vector>
 
-// --- ADD THIS BLOCK ---
 #ifdef __ANDROID__
 #include <vulkan/vulkan_android.h> // For AHB extension names
 #endif
-// --- END OF BLOCK ---
 
-
-// --- ADD THIS BLOCK ---
 
 // For debug builds, we enable validation layers
 #ifdef NDEBUG
@@ -24,8 +20,6 @@ const std::vector<const char*> kValidationLayers = {
     "VK_LAYER_KHRONOS_validation"
 };
 
-// --- END OF BLOCK ---
-// ... (Debug callback helpers are unchanged)
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -56,7 +50,6 @@ static void DestroyDebugUtilsMessengerEXT(VkInstance instance,
         func(instance, debugMessenger, pAllocator);
     }
 }
-// ... (rest of the file is unchanged up to BeginOneTimeCommands)
 
 VulkanContext::VulkanContext() { }
 VulkanContext::~VulkanContext() { Shutdown(); }
@@ -211,7 +204,6 @@ bool VulkanContext::createDevice() {
     create_info.queueCreateInfoCount = 1;
     create_info.pEnabledFeatures = &device_features;
     
-    // --- MODIFY THIS BLOCK ---
     #ifdef __ANDROID__
     // Required device extensions for AHB
     std::vector<const char*> device_extensions = {
@@ -224,7 +216,6 @@ bool VulkanContext::createDevice() {
     #else
     create_info.enabledExtensionCount = 0;
     #endif
-    // --- END OF BLOCK ---
 
     if (kEnableValidationLayers) {
         create_info.enabledLayerCount = static_cast<uint32_t>(kValidationLayers.size());
@@ -262,9 +253,7 @@ VkCommandBuffer VulkanContext::BeginOneTimeCommands() {
 
     vkBeginCommandBuffer(command_buffer, &begin_info);
     
-    // --- LOG RESTORED ---
     std::cout << "[Debug PreprocessImage] Beginning one-time commands..." << std::endl;
-    // --- END LOG ---
 
     return command_buffer;
 }
@@ -282,18 +271,14 @@ void VulkanContext::EndAndSubmitCommands(VkCommandBuffer command_buffer) {
         throw std::runtime_error("Failed to create fence!");
     }
 
-    // --- LOG RESTORED ---
     std::cout << "[Debug PreprocessImage] Submitting commands..." << std::endl;
-    // --- END LOG ---
     if (vkQueueSubmit(compute_queue_, 1, &submit_info, fence) != VK_SUCCESS) {
         throw std::runtime_error("Failed to submit command buffer!");
     }
 
     vkWaitForFences(device_, 1, &fence, VK_TRUE, UINT64_MAX);
     
-    // --- LOG RESTORED ---
     std::cout << "[Debug PreprocessImage] Commands submitted and awaited." << std::endl;
-    // --- END LOG ---
     
     vkDestroyFence(device_, fence, nullptr);
     vkFreeCommandBuffers(device_, command_pool_, 1, &command_buffer);

@@ -1,5 +1,4 @@
-#ifndef THIRD_PARTY_ODML_LITERT_LITERT_SAMPLES_SUPER_RES_VULKAN_IMAGE_PROCESSOR_H_
-#define THIRD_PARTY_ODML_LITERT_LITERT_SAMPLES_SUPER_RES_VULKAN_IMAGE_PROCESSOR_H_
+#pragma once
 
 #include <vulkan/vulkan.h>
 
@@ -132,5 +131,3 @@ class VulkanImageProcessor {
     bool createDescriptorPool();
     bool createDescriptorSet();
 };
-
-#endif  // THIRD_PARTY_ODML_LITERT_LITERT_SAMPLES_SUPER_RES_VULKAN_IMAGE_PROCESSOR_H_
