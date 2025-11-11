@@ -43,11 +43,19 @@ struct TextEnhancerSession {
 
     // --- Pre-processed Data Buffers ---
     bool is_int8_input = false;
-    std::vector<float> preprocessed_data_float;
-    std::vector<uint8_t> preprocessed_data_uint8; // For int8 models
 
-    // --- Member to store last Vulkan timings ---
-    VulkanImageProcessor::TimingInfo last_vulkan_timings;
+    // --- MODIFIED: Double-buffered for pipelining ---
+    static const int kMaxFramesInFlight = 2;
+    std::vector<std::vector<float>> preprocessed_data_float_ =
+        std::vector<std::vector<float>>(kMaxFramesInFlight);
+    std::vector<std::vector<uint8_t>> preprocessed_data_uint8_ =
+        std::vector<std::vector<uint8_t>>(kMaxFramesInFlight); 
+
+    // --- MODIFIED: Pipelining state ---
+    uint64_t frame_index_ = 0;
+
+    // --- MODIFIED: Member to store last *synced* Vulkan timings ---
+    VulkanImageProcessor::TimingInfo last_synced_vulkan_timings_;
 };
 
 /**

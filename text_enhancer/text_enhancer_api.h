@@ -81,19 +81,52 @@ typedef struct {
 TextEnhancerSession* TextEnhancer_Initialize(const TextEnhancerOptions& options);
 
 /**
- * Pre-processes an AHardwareBuffer input (Android only).
+ * @brief Submits an AHardwareBuffer for asynchronous pre-processing (Android only).
+ *
+ * This function submits the pre-processing work (e.g., Vulkan shader) and
+ * returns immediately without waiting for it to complete.
+ * The session will internally manage a pipeline of buffers.
  *
  * @param session The instance session.
  * @param buffer The input AHardwareBuffer.
- * @return kTextEnhancerOk on success.
+ * @return kTextEnhancerOk on successful submission.
  */
 #ifdef __ANDROID__
-TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
-                                               AHardwareBuffer* buffer);
+TextEnhancerStatus TextEnhancer_SubmitPreProcess_AHB(TextEnhancerSession* session,
+                                                     AHardwareBuffer* buffer);
 #endif
 
 /**
+ * @brief Submits a raw RGB image buffer for asynchronous pre-processing.
+ *
+ * This function submits the pre-processing work (e.g., Vulkan shader) and
+ * returns immediately without waiting for it to complete.
+ * The session will internally manage a pipeline of buffers.
+ *
+ * @param session The instance session.
+ * @param rgb_data The input raw RGB data.
+ * @return kTextEnhancerOk on successful submission.
+ */
+TextEnhancerStatus TextEnhancer_SubmitPreProcess(TextEnhancerSession* session,
+                                                 const uint8_t* rgb_data);
+
+/**
+ * @brief Waits for the oldest in-flight pre-processing job to complete.
+ *
+ * This function blocks until the pre-processing job submitted in the
+ * previous corresponding "Submit" call is complete. After this returns,
+ * TextEnhancer_GetPreprocessedData and TextEnhancer_Run can be called
+ * for that frame.
+ *
+ * @param session The instance session.
+ * @return kTextEnhancerOk on success.
+ */
+TextEnhancerStatus TextEnhancer_SyncPreProcess(TextEnhancerSession* session);
+
+/**
  * Gets a pointer to the pre-processed (input) data buffer.
+ *
+ * @brief Must be called AFTER TextEnhancer_SyncPreProcess.
  *
  * @param session The instance session.
  * @param data A pointer to hold the buffer address.
@@ -102,16 +135,9 @@ TextEnhancerStatus TextEnhancer_PreProcess_AHB(TextEnhancerSession* session,
 TextEnhancerStatus TextEnhancer_GetPreprocessedData(TextEnhancerSession* session, uint8_t** data);
 
 /**
- * Pre-processes a raw RGB image buffer.
- *
- * @param session The instance session.
- * @param rgb_data The input raw RGB data.
- * @return kTextEnhancerOk on success.
- */
-TextEnhancerStatus TextEnhancer_PreProcess(TextEnhancerSession* session, const uint8_t* rgb_data);
-
-/**
  * Runs the text enhancement model.
+ *
+ * @brief Must be called AFTER TextEnhancer_SyncPreProcess.
  *
  * @param session The instance session.
  * @param inference_time_ms Optional output for inference time.
@@ -121,6 +147,8 @@ TextEnhancerStatus TextEnhancer_Run(TextEnhancerSession* session, float* inferen
 
 /**
  * Post-processes the model output into a displayable image.
+ *
+ * @brief Must be called AFTER TextEnhancer_Run.
  *
  * @param session The instance session.
  * @param output A struct to be filled with the output image data and dims.
@@ -147,6 +175,8 @@ void TextEnhancer_Shutdown(TextEnhancerSession* session);
 
 /**
  * @brief Gets the detailed timings from the last pre-processing step.
+ *
+ * @brief Must be called AFTER TextEnhancer_SyncPreProcess.
  *
  * @param session The instance session.
  * @param timings A pointer to a struct to be filled with the timings.

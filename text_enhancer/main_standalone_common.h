@@ -21,28 +21,30 @@
 #include <android/hardware_buffer.h>
 #endif
 
-// --- RENAMED: Define function pointer types based on TextEnhancerSession ---
+// --- MODIFIED: Define function pointer types based on TextEnhancerSession ---
 typedef TextEnhancerSession* (*t_TextEnhancer_Initialize)(const TextEnhancerOptions& options);
 typedef void (*t_TextEnhancer_Shutdown)(TextEnhancerSession* session);
 #ifdef __ANDROID__
-typedef TextEnhancerStatus (*t_TextEnhancer_PreProcess_AHB)(TextEnhancerSession* session, AHardwareBuffer* buffer);
+typedef TextEnhancerStatus (*t_TextEnhancer_SubmitPreProcess_AHB)(TextEnhancerSession* session, AHardwareBuffer* buffer); // [ADDED]
 #endif
 typedef TextEnhancerStatus (*t_TextEnhancer_GetPreprocessedData)(TextEnhancerSession* session, uint8_t** data);
-typedef TextEnhancerStatus (*t_TextEnhancer_PreProcess)(TextEnhancerSession* session, const uint8_t* rgb_data);
+typedef TextEnhancerStatus (*t_TextEnhancer_SubmitPreProcess)(TextEnhancerSession* session, const uint8_t* rgb_data); // [ADDED]
+typedef TextEnhancerStatus (*t_TextEnhancer_SyncPreProcess)(TextEnhancerSession* session); // [ADDED]
 typedef TextEnhancerStatus (*t_TextEnhancer_Run)(TextEnhancerSession* session, float* inference_time_ms);
 typedef TextEnhancerStatus (*t_TextEnhancer_PostProcess)(TextEnhancerSession* session, TextEnhancerOutput& output);
 typedef void (*t_TextEnhancer_FreeOutputData)(TextEnhancerOutput& output);
 typedef TextEnhancerStatus (*t_TextEnhancer_GetLastPreprocessorTimings)(TextEnhancerSession* session, TextEnhancerPreprocessorTimings* timings);
 // ----------------------------------------------------------------------
 
-// --- RENAMED: Global function pointers ---
+// --- MODIFIED: Global function pointers ---
 static t_TextEnhancer_Initialize fn_TextEnhancer_Initialize = nullptr;
 static t_TextEnhancer_Shutdown fn_TextEnhancer_Shutdown = nullptr;
 #ifdef __ANDROID__
-static t_TextEnhancer_PreProcess_AHB fn_TextEnhancer_PreProcess_AHB = nullptr;
+static t_TextEnhancer_SubmitPreProcess_AHB fn_TextEnhancer_SubmitPreProcess_AHB = nullptr; // [ADDED]
 #endif
 static t_TextEnhancer_GetPreprocessedData fn_TextEnhancer_GetPreprocessedData = nullptr;
-static t_TextEnhancer_PreProcess fn_TextEnhancer_PreProcess = nullptr;
+static t_TextEnhancer_SubmitPreProcess fn_TextEnhancer_SubmitPreProcess = nullptr; // [ADDED]
+static t_TextEnhancer_SyncPreProcess fn_TextEnhancer_SyncPreProcess = nullptr; // [ADDED]
 static t_TextEnhancer_Run fn_TextEnhancer_Run = nullptr;
 static t_TextEnhancer_PostProcess fn_TextEnhancer_PostProcess = nullptr;
 static t_TextEnhancer_FreeOutputData fn_TextEnhancer_FreeOutputData = nullptr;
@@ -112,7 +114,7 @@ inline void SaveOutputImage(const std::string& path,
 
 // Common main function (inline to avoid multiple definitions)
 inline int RunStandaloneSession(int argc, char** argv, const std::string& accelerator_name) {
-    // --- Arg parsing, dlopen, dlsym ---
+    // --- Arg parsing, dlopen ---
     // [OMITTED FOR BREVITY - NO CHANGES]
     if (argc < 5) {
         std::cerr << "Usage: " << argv[0] << " <lib_path.so> <model_path> <input_image> <output_image_base_path>"
@@ -141,13 +143,15 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
         dlclose(handle);                                                                \
         return 1;                                                                       \
     }
+    // --- MODIFIED: Load new symbols ---
     LOAD_SYMBOL(TextEnhancer_Initialize);
     LOAD_SYMBOL(TextEnhancer_Shutdown);
 #ifdef __ANDROID__
-    LOAD_SYMBOL(TextEnhancer_PreProcess_AHB);
+    LOAD_SYMBOL(TextEnhancer_SubmitPreProcess_AHB); // [ADDED]
 #endif
+    LOAD_SYMBOL(TextEnhancer_SubmitPreProcess); // [ADDED]
+    LOAD_SYMBOL(TextEnhancer_SyncPreProcess);   // [ADDED]
     LOAD_SYMBOL(TextEnhancer_GetPreprocessedData);
-    LOAD_SYMBOL(TextEnhancer_PreProcess);
     LOAD_SYMBOL(TextEnhancer_Run);
     LOAD_SYMBOL(TextEnhancer_PostProcess);
     LOAD_SYMBOL(TextEnhancer_FreeOutputData);
@@ -225,7 +229,7 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
 
     // --- Setup for 10-run test ---
     const int num_runs = 10;
-    std::vector<double> all_preprocess_ms;
+    std::vector<double> all_preprocess_ms; // NOTE: This will now store SUBMIT times
     std::vector<double> all_run_ms;
     std::vector<double> all_postprocess_ms;
     // --- MODIFIED: Vectors for detailed Vulkan timings ---
@@ -234,6 +238,9 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
     std::vector<double> all_readback_copy_ms;
     std::vector<double> all_gpu_shader_ms;
     std::vector<double> all_gpu_readback_ms;
+    // --- ADDED: Vectors for new loop timings ---
+    std::vector<double> all_sync_wait_ms;
+    std::vector<double> all_loop_total_ms;
     // ----------------------------------------------
 
     // --- Setup Output Directories ---
@@ -279,84 +286,113 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
     }
 #endif
 
-    // --- WARM-UP RUN ---
+    // --- MODIFIED: WARM-UP RUN (PIPELINE PRIMING) ---
     // [OMITTED FOR BREVITY - NO CHANGES]
-    std::cout << "\n--- Performing 1 Warm-up Run ---" << std::endl;
-    TextEnhancerStatus warmup_status = kTextEnhancerFailed;
+    std::cout << "\n--- Performing 1 Warm-up Run (to fill the pipeline) ---" << std::endl;
+    TextEnhancerStatus status = kTextEnhancerFailed;
+
 #ifdef __ANDROID__
     if (platform_str == "android") {
-        warmup_status = fn_TextEnhancer_PreProcess_AHB(session, ahb_handle);
+        status = fn_TextEnhancer_SubmitPreProcess_AHB(session, ahb_handle);
     } else
 #endif
     {
-        warmup_status = fn_TextEnhancer_PreProcess(session, image_data_ptr);
+        status = fn_TextEnhancer_SubmitPreProcess(session, image_data_ptr);
     }
-    if (warmup_status == kTextEnhancerOk) {
-        float dummy_inference_time = 0.0f;
-        if (fn_TextEnhancer_Run(session, &dummy_inference_time) == kTextEnhancerOk) {
-            TextEnhancerOutput warmup_output = {0};
-            if (fn_TextEnhancer_PostProcess(session, warmup_output) == kTextEnhancerOk) {
-                fn_TextEnhancer_FreeOutputData(warmup_output);
-                std::cout << "--- Warm-up Run Complete ---" << std::endl;
-            } else {
-                std::cerr << "Warm-up Post-processing failed." << std::endl;
-            }
-        } else {
-             std::cerr << "Warm-up Run failed." << std::endl;
+    
+    if (status != kTextEnhancerOk) {
+        std::cerr << "Warm-up SubmitPreProcess failed." << std::endl;
+        // ... (add cleanup)
+        return 1;
+    }
+
+    // Sync the warm-up run so the pipeline is ready for Run()
+    status = fn_TextEnhancer_SyncPreProcess(session);
+     if (status != kTextEnhancerOk) {
+        std::cerr << "Warm-up SyncPreProcess failed." << std::endl;
+        // ... (add cleanup)
+        return 1;
+    }
+
+    // Optional: Run/Post a dummy frame if needed
+    float dummy_inference_time = 0.0f;
+    if (fn_TextEnhancer_Run(session, &dummy_inference_time) == kTextEnhancerOk) {
+        TextEnhancerOutput warmup_output = {0};
+        if (fn_TextEnhancer_PostProcess(session, warmup_output) == kTextEnhancerOk) {
+            fn_TextEnhancer_FreeOutputData(warmup_output);
         }
-    } else {
-        std::cerr << "Warm-up Pre-processing failed." << std::endl;
     }
+    std::cout << "--- Warm-up Run Complete ---" << std::endl;
 
 
-    // --- Main Run Loop ---
+    // --- MODIFIED: Main Pipelined Run Loop ---
     for (int i = 0; i < num_runs; ++i) {
         std::cout << "\n--- Run " << (i + 1) << "/" << num_runs << " ---" << std::endl;
-
-        // --- Pre-process ---
-        double preprocess_ms = 0.0;
-        auto start_preprocess = std::chrono::high_resolution_clock::now();
-        auto end_preprocess = std::chrono::high_resolution_clock::now();
-        TextEnhancerStatus pre_status = kTextEnhancerFailed;
-
+        
+        // --- [ADDED] Start total loop timer ---
+        auto start_loop = std::chrono::high_resolution_clock::now();
+        
+        // --- STAGE 1: SUBMIT FRAME N ---
+        double submit_ms = 0.0;
+        auto start_submit = std::chrono::high_resolution_clock::now();
+        
 #ifdef __ANDROID__
         if (platform_str == "android") {
-            std::cout << "Pre-processing with AHardwareBuffer..." << std::endl;
-            start_preprocess = std::chrono::high_resolution_clock::now();
-            pre_status = fn_TextEnhancer_PreProcess_AHB(session, ahb_handle);
-            end_preprocess = std::chrono::high_resolution_clock::now();
-            
-            if (pre_status != kTextEnhancerOk) {
-                std::cerr << "Pre-processing (AHB) failed." << std::endl;
-                if (ahb_handle) ImageUtils::FreeAhb(ahb_handle);
-                fn_TextEnhancer_Shutdown(session);
-                dlclose(handle);
-                return 1;
-            }
-            std::cout << "Pre-processing (AHB) complete." << std::endl;
+            status = fn_TextEnhancer_SubmitPreProcess_AHB(session, ahb_handle);
         } else
 #endif
         {
-            // --- Desktop (CPU or Vulkan Staging) Path ---
-            std::cout << "Pre-processing with CPU buffer..." << std::endl;
-            start_preprocess = std::chrono::high_resolution_clock::now();
-            pre_status = fn_TextEnhancer_PreProcess(session, image_data_ptr);
-            end_preprocess = std::chrono::high_resolution_clock::now();
+            status = fn_TextEnhancer_SubmitPreProcess(session, image_data_ptr);
+        }
+        auto end_submit = std::chrono::high_resolution_clock::now();
+        submit_ms = std::chrono::duration<double, std::milli>(end_submit - start_submit).count();
+        all_preprocess_ms.push_back(submit_ms); // Store submit time
 
-            if (pre_status != kTextEnhancerOk) {
-                std::cerr << "Pre-processing failed." << std::endl;
-                if (image_data_ptr) ImageUtils::FreeImageData(image_data_ptr);
-                fn_TextEnhancer_Shutdown(session);
-                dlclose(handle);
-                return 1;
-            }
-            std::cout << "Pre-processing complete." << std::endl;
+        if (status != kTextEnhancerOk) {
+            std::cerr << "SubmitPreProcess failed for run " << i << std::endl;
+            // ... (add cleanup) ...
+            return 1;
         }
 
-        preprocess_ms = std::chrono::duration<double, std::milli>(end_preprocess - start_preprocess).count();
-        all_preprocess_ms.push_back(preprocess_ms);
+        // --- STAGE 2: PROCESS FRAME N-1 ---
+        // (This happens while Frame N's pre-processing is hopefully running on the GPU)
+        
+        float inference_time_ms = 0.0f;
+        if (fn_TextEnhancer_Run(session, &inference_time_ms) != kTextEnhancerOk) {
+            std::cerr << "Inference run failed." << std::endl;
+            // ... (add cleanup) ...
+            return 1;
+        }
+        all_run_ms.push_back(static_cast<double>(inference_time_ms));
+        
+        auto start_postprocess = std::chrono::high_resolution_clock::now();
+        TextEnhancerOutput output_data = {0};
+        if (fn_TextEnhancer_PostProcess(session, output_data) != kTextEnhancerOk) {
+            std::cerr << "Post-processing failed." << std::endl;
+            // ... (add cleanup) ...
+            return 1;
+        }
+        auto end_postprocess = std::chrono::high_resolution_clock::now();
+        double postprocess_ms = std::chrono::duration<double, std::milli>(end_postprocess - start_postprocess).count();
+        all_postprocess_ms.push_back(postprocess_ms);
 
-        // --- MODIFIED: Get detailed Vulkan timings ---
+        // --- STAGE 3: SYNC FRAME N ---
+        // Wait for Frame N's pre-processing (submitted in STAGE 1) to complete.
+        auto start_sync = std::chrono::high_resolution_clock::now();
+        status = fn_TextEnhancer_SyncPreProcess(session);
+        auto end_sync = std::chrono::high_resolution_clock::now();
+        
+        // --- [ADDED] Store sync wait time ---
+        double sync_wait_ms = std::chrono::duration<double, std::milli>(end_sync - start_sync).count();
+        all_sync_wait_ms.push_back(sync_wait_ms);
+        
+        if (status != kTextEnhancerOk) {
+            std::cerr << "SyncPreProcess failed for run " << i << std::endl;
+            // ... (add cleanup) ...
+            return 1;
+        }
+        
+        // --- Get detailed Vulkan timings (for Frame N) ---
         if (preprocessor_type_str == "vulkan") {
             TextEnhancerPreprocessorTimings vk_timings = {};
             if (fn_TextEnhancer_GetLastPreprocessorTimings(session, &vk_timings) == kTextEnhancerOk) {
@@ -366,7 +402,6 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
                 all_gpu_shader_ms.push_back(vk_timings.gpu_shader_ms);
                 all_gpu_readback_ms.push_back(vk_timings.gpu_readback_ms);
             } else {
-                // Should not happen if pre-process succeeded
                 all_staging_copy_ms.push_back(0.0);
                 all_gpu_wait_ms.push_back(0.0);
                 all_readback_copy_ms.push_back(0.0);
@@ -374,14 +409,14 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
                 all_gpu_readback_ms.push_back(0.0);
             }
         }
-        // --- END MODIFIED ---
 
         // ... (Save preprocessed image) ...
         if (save_preprocessed && i == 0) { 
+            // [OMITTED FOR BREVITY - NO CHANGES]
             std::cout << "Saving pre-processed image for verification..." << std::endl;
             uint8_t* pre_data = nullptr;
-            TextEnhancerStatus status = fn_TextEnhancer_GetPreprocessedData(session, &pre_data);
-            if (status == kTextEnhancerOk && pre_data) {
+            TextEnhancerStatus get_data_status = fn_TextEnhancer_GetPreprocessedData(session, &pre_data);
+            if (get_data_status == kTextEnhancerOk && pre_data) {
                 std::vector<unsigned char> rgb_buffer = 
                     ConvertRgbaToRgb(pre_data, options.input_width, options.input_height);
                 ImageUtils::SaveImage("preprocessed_output.png", options.input_width, options.input_height, 3, rgb_buffer.data());
@@ -391,82 +426,53 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
             }
         }
 
-        // --- Run Inference ---
-        // [OMITTED FOR BREVITY - NO CHANGES]
-        float inference_time_ms = 0.0f;
-        if (fn_TextEnhancer_Run(session, &inference_time_ms) != kTextEnhancerOk) {
-            std::cerr << "Inference run failed." << std::endl;
-#ifdef __ANDROID__
-            if (ahb_handle) ImageUtils::FreeAhb(ahb_handle);
-#endif
-            if (image_data_ptr) ImageUtils::FreeImageData(image_data_ptr);
-            fn_TextEnhancer_Shutdown(session);
-            dlclose(handle);
-            return 1;
-        }
-        all_run_ms.push_back(static_cast<double>(inference_time_ms));
-        std::cout << "Inference complete." << std::endl;
-
-        // --- Post-process & Save ---
-        // [OMITTED FOR BREVITY - NO CHANGES]
-        auto start_postprocess = std::chrono::high_resolution_clock::now();
-        TextEnhancerOutput output_data = {0};
-        if (fn_TextEnhancer_PostProcess(session, output_data) != kTextEnhancerOk) {
-            std::cerr << "Post-processing failed." << std::endl;
-#ifdef __ANDROID__
-            if (ahb_handle) ImageUtils::FreeAhb(ahb_handle);
-#endif
-            if (image_data_ptr) ImageUtils::FreeImageData(image_data_ptr);
-            fn_TextEnhancer_Shutdown(session);
-            dlclose(handle);
-            return 1;
-        }
-        auto end_postprocess = std::chrono::high_resolution_clock::now();
-        double postprocess_ms = std::chrono::duration<double, std::milli>(end_postprocess - start_postprocess).count();
-        all_postprocess_ms.push_back(postprocess_ms);
-        std::cout << "Output received: " << output_data.width << "x" << output_data.height << std::endl;
-
-
-        // --- E2E Timings for THIS run ---
+        // --- MODIFIED: Timings for THIS run ---
         double run_ms = static_cast<double>(inference_time_ms);
-        double total_e2e_ms = preprocess_ms + run_ms + postprocess_ms;
-
-        std::cout << "--- Run " << (i + 1) << " Timing Summary ---" << std::endl;
-        std::cout << "Pre-processing Time: " << preprocess_ms << " ms" << std::endl;
         
-        // --- MODIFIED: Print detailed Vulkan timings per run ---
+        // --- [ADDED] End total loop timer ---
+        auto end_loop = std::chrono::high_resolution_clock::now();
+        double loop_total_ms = std::chrono::duration<double, std::milli>(end_loop - start_loop).count();
+        all_loop_total_ms.push_back(loop_total_ms);
+        // --- End Added ---
+
+        // --- [MODIFIED] Per-Run Timing Summary ---
+        std::cout << "--- Run " << (i + 1) << " Timing Summary ---" << std::endl;
+        std::cout << "Submit (Frame N CPU work):   " << submit_ms << " ms" << std::endl;
+        std::cout << "Inference (Frame N-1 block): " << run_ms << " ms" << std::endl;
+        std::cout << "Post-Proc (Frame N-1 CPU):   " << postprocess_ms << " ms" << std::endl;
+        std::cout << "Sync (Frame N CPU wait):     " << sync_wait_ms << " ms" << std::endl;
+        
         if (preprocessor_type_str == "vulkan" && !all_gpu_wait_ms.empty()) {
+             std::cout << "  [Vulkan Timings for Frame N (synced)]:" << std::endl;
              std::cout << "  - Staging Copy:  " << all_staging_copy_ms.back() << " ms" << std::endl;
              std::cout << "  - GPU Wait:      " << all_gpu_wait_ms.back() << " ms" << std::endl;
-             // Print GPU-only sub-timings if they are valid
              if (!all_gpu_shader_ms.empty() && all_gpu_shader_ms.back() > 0.0) {
                 std::cout << "    - (GPU Shader): " << all_gpu_shader_ms.back() << " ms" << std::endl;
                 std::cout << "    - (GPU Readback): " << all_gpu_readback_ms.back() << " ms" << std::endl;
              }
              std::cout << "  - Readback Copy: " << all_readback_copy_ms.back() << " ms" << std::endl;
         }
-        // --- END MODIFIED ---
         
-        std::cout << "Inference Time (TextEnhancer_Run): " << run_ms << " ms" << std::endl;
-        std::cout << "Post-processing Time: " << postprocess_ms << " ms" << std::endl;
-        std::cout << "Total E2E Time (Pre + Run + Post): " << total_e2e_ms << " ms" << std::endl;
+        std::cout << "-------------------------------------------" << std::endl;
+        std::cout << "Total Loop Time (This Frame): " << loop_total_ms << " ms" << std::endl;
+        std::cout << "Throughput (This Frame):    " << (1000.0 / loop_total_ms) << " FPS" << std::endl;
+        // --- END MODIFIED ---
 
 
-        // --- Save This Run's Image ---
-        // [OMITTED FOR BREVITY - NO CHANGES]
+        // --- Save This Run's Image (N-1) ---
         std::ostringstream oss;
         oss << output_run_dir << "/" << output_base_name << "_" << i << output_extension;
         std::string current_output_path = oss.str();
         SaveOutputImage(current_output_path, output_data, datatype_str);
         std::cout << "Output image " << i << " saved to " << current_output_path << std::endl;
 
-        // --- Free this run's output data ---
+        // --- Free this run's output data (N-1) ---
         fn_TextEnhancer_FreeOutputData(output_data);
 
     } // --- END of num_runs loop ---
 
 
-    // --- Calculate and Print Final Statistics ---
+    // --- [MODIFIED] Calculate and Print Final Statistics ---
     auto calculate_stats = [](const std::vector<double>& v) {
         if (v.empty()) return std::make_tuple(0.0, 0.0, 0.0);
         double sum = std::accumulate(v.begin(), v.end(), 0.0);
@@ -479,26 +485,26 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
     auto [min_pre, max_pre, avg_pre] = calculate_stats(all_preprocess_ms);
     auto [min_run, max_run, avg_run] = calculate_stats(all_run_ms);
     auto [min_post, max_post, avg_post] = calculate_stats(all_postprocess_ms);
+    auto [min_sync, max_sync, avg_sync] = calculate_stats(all_sync_wait_ms);
+    auto [min_loop, max_loop, avg_loop] = calculate_stats(all_loop_total_ms);
 
     std::cout << "\n--- Timing Statistics (" << num_runs << " runs) ---" << std::endl;
-    std::cout << std::fixed << std::setprecision(3); // Increase precision
-    std::cout << "                   Min (ms)   Max (ms)   Avg (ms)" << std::endl;
-    std::cout << "-------------------------------------------------" << std::endl;
-    std::cout << "Pre-processing:  " << std::setw(9) << min_pre
+    std::cout << std::fixed << std::setprecision(3);
+    std::cout << "Stage                    Min (ms)   Max (ms)   Avg (ms)" << std::endl;
+    std::cout << "-------------------------------------------------------" << std::endl;
+    std::cout << "Submit (CPU):          " << std::setw(9) << min_pre
               << std::setw(11) << max_pre << std::setw(11) << avg_pre << std::endl;
 
-    // --- MODIFIED: Print detailed Vulkan stats ---
     if (preprocessor_type_str == "vulkan") {
         auto [min_stage, max_stage, avg_stage] = calculate_stats(all_staging_copy_ms);
         auto [min_gpu, max_gpu, avg_gpu] = calculate_stats(all_gpu_wait_ms);
         auto [min_read, max_read, avg_read] = calculate_stats(all_readback_copy_ms);
         
-        std::cout << "  - Staging Copy:  " << std::setw(9) << min_stage
+        std::cout << "  - Staging Copy:      " << std::setw(9) << min_stage
                   << std::setw(11) << max_stage << std::setw(11) << avg_stage << std::endl;
-        std::cout << "  - GPU Wait:      " << std::setw(9) << min_gpu
+        std::cout << "  - GPU Wait:          " << std::setw(9) << min_gpu
                   << std::setw(11) << max_gpu << std::setw(11) << avg_gpu << std::endl;
 
-        // Only print shader stats if they are valid (i.e., > 0)
         if (!all_gpu_shader_ms.empty() && all_gpu_shader_ms[0] > 0.0) {
             auto [min_shader, max_shader, avg_shader] = calculate_stats(all_gpu_shader_ms);
             auto [min_gpuread, max_gpuread, avg_gpuread] = calculate_stats(all_gpu_readback_ms);
@@ -509,18 +515,25 @@ inline int RunStandaloneSession(int argc, char** argv, const std::string& accele
                       << std::setw(11) << max_gpuread << std::setw(11) << avg_gpuread << std::endl;
         }
 
-        std::cout << "  - Readback Copy: " << std::setw(9) << min_read
+        std::cout << "  - Readback Copy:     " << std::setw(9) << min_read
                   << std::setw(11) << max_read << std::setw(11) << avg_read << std::endl;
     }
-    // --- END MODIFIED ---
 
-    std::cout << "Inference (Run): " << std::setw(9) << min_run
+    std::cout << "Inference (Accelerator): " << std::setw(9) << min_run
               << std::setw(11) << max_run << std::setw(11) << avg_run << std::endl;
-    std::cout << "Post-processing: " << std::setw(9) << min_post
+    std::cout << "Post-Proc (CPU):       " << std::setw(9) << min_post
               << std::setw(11) << max_post << std::setw(11) << avg_post << std::endl;
-    std::cout << "-------------------------------------------------" << std::endl;
-    std::cout << "Total E2E (Avg): " << (avg_pre + avg_run + avg_post) << " ms" << std::endl;
-    std::cout << "-------------------------------------------------\n" << std::endl;
+    std::cout << "Sync Wait (CPU):       " << std::setw(9) << min_sync
+              << std::setw(11) << max_sync << std::setw(11) << avg_sync << std::endl;
+    std::cout << "-------------------------------------------------------" << std::endl;
+    std::cout << "Total Loop Time:       " << std::setw(9) << min_loop
+              << std::setw(11) << max_loop << std::setw(11) << avg_loop << std::endl;
+    std::cout << "-------------------------------------------------------\n" << std::endl;
+    std::cout << "--- Throughput Summary ---" << std::endl;
+    std::cout << "Average Time per Frame: " << avg_loop << " ms" << std::endl;
+    std::cout << "Average Throughput (FPS): " << (1000.0 / avg_loop) << " FPS" << std::endl;
+    std::cout << "-------------------------------------------------------\n" << std::endl;
+    // --- END MODIFIED ---
 
 
     // --- Cleanup ---

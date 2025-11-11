@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <string>
+#include <vector> // [ADDED]
 
 #include "vulkan/vulkan_compute_pipeline.h"
 #include "vulkan/vulkan_context.h"
@@ -31,6 +32,9 @@ class VulkanImageProcessor {
         double gpu_readback_ms = 0.0;    // Time for vkCmdCopyBuffer (device to host buffer).
     };
 
+    // [ADDED] Number of buffers for pipelining
+    static const int kMaxFramesInFlight = 2;
+
     VulkanImageProcessor();
     ~VulkanImageProcessor();
 
@@ -54,55 +58,67 @@ class VulkanImageProcessor {
      */
     void Shutdown();
 
+    // --- [REMOVED] PreprocessImage (replaced by Submit/Sync) ---
+
+#ifdef __ANDROID__
+    // --- [REMOVED] PreprocessImage (AHB) (replaced by Submit/Sync) ---
+
     /**
-     * @brief Performs center-crop and resize using the Vulkan compute shader.
-     * (This path is now optimized to re-use persistent resources)
+     * @brief [ADDED] Submits preprocessing work for an AHardwareBuffer.
+     *
+     * Waits for the specified buffer_index's fence (from N-2 frames ago)
+     * to ensure resources are free, then submits new work.
+     * Does NOT wait for the new work to complete.
+     *
+     * @param in_buffer Pointer to the source AHardwareBuffer.
+     * @param in_width Width of the source image (must match AHB).
+     * @param in_height Height of the source image (must match AHB).
+     * @param buffer_index The index (0 or 1) of the resource set to use.
+     * @return true on successful submission, false on failure.
+     */
+    bool SubmitPreprocessImage(AHardwareBuffer* in_buffer, int in_width, int in_height,
+                               int buffer_index);
+
+    // --- [OMITTED] PreprocessImage_ZeroCopy, GetOutputAhb (unchanged) ---
+    bool PreprocessImage_ZeroCopy(AHardwareBuffer* in_buffer, int in_width, int in_height);
+    AHardwareBuffer* GetOutputAhb() { return output_ahb_; }
+#endif  // __ANDROID__
+
+    /**
+     * @brief [ADDED] Submits preprocessing work for a CPU buffer.
+     *
+     * Waits for the specified buffer_index's fence (from N-2 frames ago)
+     * to ensure resources are free, then submits new work.
+     * Does NOT wait for the new work to complete.
      *
      * @param in_data Pointer to the source image data (unsigned char).
      * @param in_width Width of the source image.
      * @param in_height Height of the source image.
      * @param in_channels Channels of the source image (e.g., 4 for RGBA).
-     * @param out_data Pointer to the destination buffer (float* or int8_t*).
-     * @return true on success, false on failure.
+     * @param buffer_index The index (0 or 1) of the resource set to use.
+     * @return true on successful submission, false on failure.
      */
-    bool PreprocessImage(const unsigned char* in_data, int in_width, int in_height, int in_channels,
-                         void* out_data);
+    bool SubmitPreprocessImage(const unsigned char* in_data, int in_width, int in_height,
+                               int in_channels, int buffer_index);
 
-#ifdef __ANDROID__
     /**
-     * @brief Performs center-crop and resize using an AHardwareBuffer as input.
-     * (This path is now optimized to cache the imported AHB)
+     * @brief [ADDED] Waits for preprocessing work and reads back the result.
      *
-     * @param in_buffer Pointer to the source AHardwareBuffer.
-     * @param in_width Width of the source image (must match AHB).
-     * @param in_height Height of the source image (must match AHB).
-     * @param out_data Pointer to the destination buffer (float* or int8_t*).
-     * @return true on success, false on failure.
-     */
-    bool PreprocessImage(AHardwareBuffer* in_buffer, int in_width, int in_height, void* out_data);
-
-    /**
-     * @brief Performs center-crop and resize (Zero-Copy path).
-     * This populates the internal output AHardwareBuffer.
+     * Waits for the fence associated with buffer_index to signal,
+     * then copies the data from the readback buffer to out_data.
      *
-     * @param in_buffer Pointer to the source AHardwareBuffer.
-     * @param in_width Width of the source image (must match AHB).
-     * @param in_height Height of the source image (must match AHB).
+     * @param out_data Pointer to the destination buffer (float* or int8_t*).
+     * @param buffer_index The index (0 or 1) of the resource set to sync.
      * @return true on success, false on failure.
      */
-    bool PreprocessImage_ZeroCopy(AHardwareBuffer* in_buffer, int in_width, int in_height);
+    bool SyncPreprocess(void* out_data, int buffer_index);
 
     /**
-     * @brief Gets the handle to the persistent output AHardwareBuffer.
-     * This buffer is the destination for the Vulkan compute shader.
-     * @return AHardwareBuffer handle, or nullptr if not initialized.
+     * @brief [MODIFIED] Public getter for last timings for a specific buffer.
      */
-    AHardwareBuffer* GetOutputAhb() { return output_ahb_; }
-
-#endif  // __ANDROID__
-
-    // --- Public getter for last timings ---
-    TimingInfo GetLastTimings() const { return last_timings_; }
+    TimingInfo GetLastTimings(int buffer_index) const {
+        return last_timings_[buffer_index];
+    }
 
    private:
     // --- Core Vulkan Modules ---
@@ -121,25 +137,28 @@ class VulkanImageProcessor {
     VkDeviceSize in_staging_size_bytes_ = 0;
     VkFormat in_image_format_ = VK_FORMAT_UNDEFINED;
 
-    // --- Persistent Staging/Input Resources ---
-    VkBuffer staging_buffer_ = VK_NULL_HANDLE;
-    VkDeviceMemory staging_buffer_memory_ = VK_NULL_HANDLE;
+    // --- [MODIFIED] Persistent Staging/Input Resources ---
+    // Staging buffers are double-buffered
+    std::vector<VkBuffer> staging_buffers_;
+    std::vector<VkDeviceMemory> staging_buffers_memory_;
 
+    // Input image is single-buffered (overwritten each frame)
     VkImage in_image_ = VK_NULL_HANDLE;
     VkDeviceMemory in_image_memory_ = VK_NULL_HANDLE;
     VkImageView in_image_view_ = VK_NULL_HANDLE;
 
-    // --- Persistent Output/Readback Resources ---
-    VkBuffer output_buffer_device_ = VK_NULL_HANDLE;
-    VkDeviceMemory output_buffer_device_memory_ = VK_NULL_HANDLE;
-    VkBuffer readback_buffer_ = VK_NULL_HANDLE;
-    VkDeviceMemory readback_buffer_memory_ = VK_NULL_HANDLE;
+    // --- [MODIFIED] Persistent Output/Readback Resources (Double-buffered) ---
+    std::vector<VkBuffer> output_buffers_device_;
+    std::vector<VkDeviceMemory> output_buffers_device_memory_;
+    std::vector<VkBuffer> readback_buffers_;
+    std::vector<VkDeviceMemory> readback_buffers_memory_;
 
-    // --- Persistent Common Resources ---
-    VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;
-    VkDescriptorSet descriptor_set_ = VK_NULL_HANDLE;
-    VkFence fence_ = VK_NULL_HANDLE;
-    TimingInfo last_timings_ = {};
+    // --- [MODIFIED] Persistent Common Resources (Double-buffered) ---
+    VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE; // Single pool
+    std::vector<VkDescriptorSet> descriptor_sets_;
+    std::vector<VkFence> fences_;
+    std::vector<VkCommandBuffer> command_buffers_; // [ADDED]
+    std::vector<TimingInfo> last_timings_;
 
     // --- Persistent AHB Input Resources (Cache) ---
     AHardwareBuffer* last_in_ahb_ = nullptr;
@@ -165,5 +184,6 @@ class VulkanImageProcessor {
     void destroyPersistentResources();
     void destroyAhbInputResources();
     bool createDescriptorPool();
-    bool createDescriptorSet();
+    // [MODIFIED]
+    bool createDescriptorSets();
 };
