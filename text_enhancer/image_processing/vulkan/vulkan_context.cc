@@ -20,6 +20,8 @@ const std::vector<const char*> kValidationLayers = {
     "VK_LAYER_KHRONOS_validation"
 };
 
+// ... (debugCallback, CreateDebugUtilsMessengerEXT, DestroyDebugUtilsMessengerEXT) ...
+// [OMITTED FOR BREVITY]
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -50,6 +52,7 @@ static void DestroyDebugUtilsMessengerEXT(VkInstance instance,
         func(instance, debugMessenger, pAllocator);
     }
 }
+
 
 VulkanContext::VulkanContext() { }
 VulkanContext::~VulkanContext() { Shutdown(); }
@@ -96,6 +99,13 @@ void VulkanContext::Shutdown() {
         vkDeviceWaitIdle(device_);
     }
 
+    // --- NEW: Destroy Query Pool ---
+    if (query_pool_ != VK_NULL_HANDLE) {
+        vkDestroyQueryPool(device_, query_pool_, nullptr);
+        query_pool_ = VK_NULL_HANDLE;
+    }
+    // --- END NEW ---
+
     if (command_pool_ != VK_NULL_HANDLE) {
         vkDestroyCommandPool(device_, command_pool_, nullptr);
         command_pool_ = VK_NULL_HANDLE;
@@ -119,6 +129,9 @@ void VulkanContext::Shutdown() {
     physical_device_ = VK_NULL_HANDLE;
     compute_queue_ = VK_NULL_HANDLE;
 }
+
+// ... (createInstance, setupDebugMessenger - NO CHANGES) ...
+// [OMITTED FOR BREVITY]
 bool VulkanContext::createInstance() {
     VkApplicationInfo app_info = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
     app_info.pApplicationName = "ImageProcessor";
@@ -134,12 +147,9 @@ bool VulkanContext::createInstance() {
     if (kEnableValidationLayers) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
-    // --- ADD THIS BLOCK ---
     #ifdef __ANDROID__
-    // Required for AHB support
     extensions.push_back(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
     #endif
-    // --- END OF BLOCK ---
     create_info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     create_info.ppEnabledExtensionNames = extensions.data();
 
@@ -165,6 +175,8 @@ bool VulkanContext::setupDebugMessenger() {
 
     return CreateDebugUtilsMessengerEXT(instance_, &create_info, nullptr, &debug_messenger_) == VK_SUCCESS;
 }
+
+
 bool VulkanContext::findPhysicalDevice() {
     uint32_t device_count = 0;
     vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
@@ -184,6 +196,21 @@ bool VulkanContext::findPhysicalDevice() {
             if (queue_families[i].queueFlags & VK_QUEUE_COMPUTE_BIT) {
                 physical_device_ = device;
                 compute_queue_family_index_ = i;
+                
+                // --- NEW: Get timestamp period ---
+                VkPhysicalDeviceProperties device_properties;
+                vkGetPhysicalDeviceProperties(physical_device_, &device_properties);
+                // Check if the queue family supports timestamps
+                if (queue_families[i].timestampValidBits > 0) {
+                     timestamp_period_ = device_properties.limits.timestampPeriod;
+                     std::cout << "Vulkan: Found compute queue. Timestamp period: " 
+                               << timestamp_period_ << " ns/tick" << std::endl;
+                } else {
+                    timestamp_period_ = 0.0f; // Timestamps not supported
+                    std::cout << "Vulkan: Found compute queue, but timestamps NOT supported." << std::endl;
+                }
+                // --- END NEW ---
+                
                 return true;
             }
         }
@@ -205,7 +232,6 @@ bool VulkanContext::createDevice() {
     create_info.pEnabledFeatures = &device_features;
     
     #ifdef __ANDROID__
-    // Required device extensions for AHB
     std::vector<const char*> device_extensions = {
         VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME,
         VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
@@ -229,8 +255,29 @@ bool VulkanContext::createDevice() {
     }
 
     vkGetDeviceQueue(device_, compute_queue_family_index_, 0, &compute_queue_);
+    
+    // --- NEW: Create Query Pool ---
+    // (Only if timestamps are supported)
+    if (timestamp_period_ > 0.0f) {
+        VkQueryPoolCreateInfo query_pool_info = {VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+        query_pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
+        // We need 4 timestamps: 0=pre-shader, 1=post-shader, 2=pre-copy, 3=post-copy
+        query_pool_info.queryCount = 4; 
+        if (vkCreateQueryPool(device_, &query_pool_info, nullptr, &query_pool_) != VK_SUCCESS) {
+            std::cerr << "Failed to create query pool!" << std::endl;
+            // Not a fatal error, we can continue without timings
+            query_pool_ = VK_NULL_HANDLE;
+        } else {
+            std::cout << "Vulkan query pool created." << std::endl;
+        }
+    }
+    // --- END NEW ---
+    
     return true;
 }
+
+// ... (createCommandPool, BeginOneTimeCommands, EndAndSubmitCommands - NO CHANGES) ...
+// [OMITTED FOR BREVITY]
 bool VulkanContext::createCommandPool() {
     VkCommandPoolCreateInfo pool_info = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
     pool_info.queueFamilyIndex = compute_queue_family_index_;
@@ -238,7 +285,6 @@ bool VulkanContext::createCommandPool() {
 
     return vkCreateCommandPool(device_, &pool_info, nullptr, &command_pool_) == VK_SUCCESS;
 }
-
 VkCommandBuffer VulkanContext::BeginOneTimeCommands() {
     VkCommandBufferAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -257,7 +303,6 @@ VkCommandBuffer VulkanContext::BeginOneTimeCommands() {
 
     return command_buffer;
 }
-
 void VulkanContext::EndAndSubmitCommands(VkCommandBuffer command_buffer) {
     vkEndCommandBuffer(command_buffer);
 

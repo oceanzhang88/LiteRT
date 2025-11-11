@@ -56,6 +56,23 @@ typedef struct {
 } TextEnhancerOutput;
 
 /**
+ * @brief C-compatible struct for detailed pre-processor timings.
+ */
+typedef struct {
+    // --- CPU Timings ---
+    double staging_copy_ms;    // Time for CPU to map and memcpy to staging buffer.
+    double readback_copy_ms;   // Time for CPU to map and memcpy from readback buffer.
+    
+    // --- CPU Wait Time ---
+    double gpu_submit_wait_ms; // Total time CPU waits for vkWaitForFences.
+    
+    // --- GPU-Only Timings (from vkCmdWriteTimestamp) ---
+    double gpu_shader_ms;      // Time for vkCmdDispatch (the compute shader).
+    double gpu_readback_ms;    // Time for vkCmdCopyBuffer (device to host buffer).
+} TextEnhancerPreprocessorTimings;
+
+
+/**
  * Initializes the Text Enhancer instance.
  *
  * @param options Configuration options.
@@ -127,6 +144,17 @@ void TextEnhancer_FreeOutputData(TextEnhancerOutput& output);
  * @param session The instance session to be freed.
  */
 void TextEnhancer_Shutdown(TextEnhancerSession* session);
+
+/**
+ * @brief Gets the detailed timings from the last pre-processing step.
+ *
+ * @param session The instance session.
+ * @param timings A pointer to a struct to be filled with the timings.
+ * @return kTextEnhancerOk on success, or kTextEnhancerFailed if not using Vulkan.
+ */
+TextEnhancerStatus TextEnhancer_GetLastPreprocessorTimings(
+    TextEnhancerSession* session,
+    TextEnhancerPreprocessorTimings* timings);
 
 #ifdef __cplusplus
 }  // extern "C"

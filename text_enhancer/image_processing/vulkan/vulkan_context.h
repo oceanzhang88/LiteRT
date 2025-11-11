@@ -20,6 +20,11 @@ public:
     VkCommandPool GetCommandPool() const { return command_pool_; }
     uint32_t GetComputeQueueFamilyIndex() const { return compute_queue_family_index_; }
 
+    // --- NEW: Getters for timestamp queries ---
+    VkQueryPool GetQueryPool() const { return query_pool_; }
+    float GetTimestampPeriod() const { return timestamp_period_; }
+    // --- END NEW ---
+
     // Command buffer helpers
     VkCommandBuffer BeginOneTimeCommands();
     void EndAndSubmitCommands(VkCommandBuffer command_buffer);
@@ -41,4 +46,9 @@ private:
 
     // Resource management
     VkCommandPool command_pool_ = VK_NULL_HANDLE;
+
+    // --- NEW: Timestamp query resources ---
+    VkQueryPool query_pool_ = VK_NULL_HANDLE;
+    float timestamp_period_ = 1.0f; // Nanoseconds per tick
+    // --- END NEW ---
 };

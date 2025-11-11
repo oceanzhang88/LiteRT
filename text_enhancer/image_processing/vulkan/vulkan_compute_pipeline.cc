@@ -29,21 +29,20 @@ bool VulkanComputePipeline::Initialize(VulkanContext* context,
 
         // 2. Create Descriptor Set Layout
 
-        // --- FIX (Binding 0): Input Storage Image ---
+        // --- Binding 0: Input Storage Image ---
         VkDescriptorSetLayoutBinding input_storage_binding = {};
         input_storage_binding.binding = 0;
         input_storage_binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         input_storage_binding.descriptorCount = 1;
         input_storage_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-        // --- OPTIMIZATION (Binding 1): Output Storage Buffer ---
+        // --- Binding 1: Output Storage Buffer ---
         VkDescriptorSetLayoutBinding output_storage_binding = {};
         output_storage_binding.binding = 1;
         output_storage_binding.descriptorType =
-            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;  // <-- THE CHANGE
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
         output_storage_binding.descriptorCount = 1;
         output_storage_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-        // --- END OPTIMIZATION ---
 
         std::vector<VkDescriptorSetLayoutBinding> bindings = {input_storage_binding,
                                                               output_storage_binding};

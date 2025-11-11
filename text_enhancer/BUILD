@@ -19,8 +19,6 @@ package(
 filegroup(
     name = "shader_files",
     srcs = [
-        "shaders/passthrough_shader.vert",
-        "shaders/super_res_compute.glsl",
         "shaders/crop_resize_float.comp",
         "shaders/crop_resize_float.spv",
         "shaders/crop_resize_uint8.comp",
@@ -45,12 +43,7 @@ filegroup(
         "models/super_res-float_npu.tflite",
         "models/super_res-float_npu_vst.tflite",
         "models/super_res-float_gpu.tflite",
-        "models/real_x4v3-float.tflite",
-        "models/real_x4v3_8650-float.tflite",
-        "models/real_x4v3_8750-float.tflite",
-        "models/real_x4v3-w8a8.tflite",
         "models/super_res-w8a8_SM8450.tflite",
-        # "models/selfie_multiclass_256x256_SM8750.tflite",
     ],
 )
 

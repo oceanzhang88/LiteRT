@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Deploys and runs the Text Enhancer sample on a connected Android device.
+# Deploys and runs the Text Enhancer on a connected Android device.
 #
 # Prerequisites:
 # 1. Android device connected with 'adb'.
@@ -40,7 +40,7 @@ POSITIONAL_ARGS=() # Array to hold non-option arguments
 show_help() {
     echo "Usage: $0 [OPTIONS] <bazel_bin_path>" # Changed to $0
     echo ""
-    echo "Deploys and runs the Text Enhancer sample on a connected Android device."
+    echo "Deploys and runs the Text Enhancer on a connected Android device."
     echo ""
     echo "Options:"
     echo "  --accelerator=cpu|gpu|npu  (Default: cpu)"
@@ -220,8 +220,8 @@ fi
 TARGET_DIR="/data/local/tmp/text_enhancer_android"
 
 # Paths relative to bazel-bin
-EXECUTABLE_REL_PATH="litert/samples/text_enhancer/text_enhancer_standalone_${ACCELERATOR_NAME}"
-LIB_REL_PATH="litert/samples/text_enhancer/text_enhancer_lib_${ACCELERATOR_NAME}.so"
+EXECUTABLE_REL_PATH="text_enhancer/text_enhancer_standalone_${ACCELERATOR_NAME}"
+LIB_REL_PATH="text_enhancer/text_enhancer_lib_${ACCELERATOR_NAME}.so"
 RUNTIME_LIB_REL_PATH="litert/c/libLiteRtRuntimeCApi.so"
 
 # --- FIX: Paths are now absolute, based on SCRIPT_DIR ---
@@ -242,8 +242,8 @@ ADSP_LIBRARY_PATH_ON_DEVICE="${DEVICE_NPU_LIBRARY_DIR}/"
 
 # Set NPU library paths on host
 # Note: These paths are relative to bazel-bin, so they are OK
-ROOT_DIR_FROM_BAZEL_BIN="litert"
-PACKAGE_LOCATION="${ROOT_DIR_FROM_BAZEL_BIN}/samples/text_enhancer"
+ROOT_DIR_FROM_BAZEL_BIN=""
+PACKAGE_LOCATION="${ROOT_DIR_FROM_BAZEL_BIN}/text_enhancer"
 PACKAGE_NAME="text_enhancer_standalone_${ACCELERATOR_NAME}"
 
 if [[ -z "$HOST_NPU_LIB" ]]; then
@@ -394,7 +394,7 @@ fi
 
 echo ""
 echo "Deployment complete."
-echo "To run the text enhancer sample on the device, use a command like this:"
+echo "To run the text enhancer on the device, use a command like this:"
 echo "  adb shell \"$FULL_COMMAND\""
 
 # --- Execute the command ---

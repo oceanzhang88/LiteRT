@@ -17,6 +17,20 @@
 
 class VulkanImageProcessor {
    public:
+    // --- Public struct for detailed timings ---
+    struct TimingInfo {
+        // --- CPU Timings ---
+        double staging_copy_ms = 0.0;    // CPU memcpy to staging
+        double readback_copy_ms = 0.0;   // CPU memcpy from readback
+        
+        // --- CPU Wait Time ---
+        double gpu_submit_wait_ms = 0.0; // Total vkWaitForFences
+        
+        // --- GPU-Only Timings (from vkCmdWriteTimestamp) ---
+        double gpu_shader_ms = 0.0;      // Time for vkCmdDispatch (the compute shader).
+        double gpu_readback_ms = 0.0;    // Time for vkCmdCopyBuffer (device to host buffer).
+    };
+
     VulkanImageProcessor();
     ~VulkanImageProcessor();
 
@@ -24,14 +38,16 @@ class VulkanImageProcessor {
      * @brief Initializes the Vulkan context and compute pipeline.
      *
      * @param shader_spirv_path Path to the compiled SPIR-V shader file.
-     * (This MUST match the 'is_output_int8' flag)
+     * @param max_in_width Maximum expected input width.
+     * @param max_in_height Maximum expected input height.
+     * @param max_in_channels Maximum expected input channels (e.g., 4).
      * @param out_width Target width (e.g., 256).
      * @param out_height Target height (e.g., 256).
      * @param is_output_int8 True if the output is int8, false if float.
      * @return true on success, false on failure.
      */
-    bool Initialize(const std::string& shader_spirv_path, int out_width, int out_height,
-                    bool is_output_int8);
+    bool Initialize(const std::string& shader_spirv_path, int max_in_width, int max_in_height,
+                    int max_in_channels, int out_width, int out_height, bool is_output_int8);
 
     /**
      * @brief Shuts down all Vulkan resources.
@@ -40,6 +56,7 @@ class VulkanImageProcessor {
 
     /**
      * @brief Performs center-crop and resize using the Vulkan compute shader.
+     * (This path is now optimized to re-use persistent resources)
      *
      * @param in_data Pointer to the source image data (unsigned char).
      * @param in_width Width of the source image.
@@ -54,6 +71,7 @@ class VulkanImageProcessor {
 #ifdef __ANDROID__
     /**
      * @brief Performs center-crop and resize using an AHardwareBuffer as input.
+     * (This path is now optimized to cache the imported AHB)
      *
      * @param in_buffer Pointer to the source AHardwareBuffer.
      * @param in_width Width of the source image (must match AHB).
@@ -83,35 +101,52 @@ class VulkanImageProcessor {
 
 #endif  // __ANDROID__
 
+    // --- Public getter for last timings ---
+    TimingInfo GetLastTimings() const { return last_timings_; }
+
    private:
     // --- Core Vulkan Modules ---
     std::unique_ptr<VulkanContext> context_;
     std::unique_ptr<VulkanComputePipeline> compute_pipeline_;
 
-    // --- Persistent Resources ---
+    // --- Output Image Properties ---
     int out_width_ = 0;
     int out_height_ = 0;
     VkDeviceSize out_size_bytes_ = 0;
+    bool is_output_int8_ = false;
 
-    // --- OPTIMIZATION: Device-local output buffer ---
-    // This buffer is the *output* (written by shader)
+    // --- Persistent Input Image Properties ---
+    int max_in_width_ = 0;
+    int max_in_height_ = 0;
+    VkDeviceSize in_staging_size_bytes_ = 0;
+    VkFormat in_image_format_ = VK_FORMAT_UNDEFINED;
+
+    // --- Persistent Staging/Input Resources ---
+    VkBuffer staging_buffer_ = VK_NULL_HANDLE;
+    VkDeviceMemory staging_buffer_memory_ = VK_NULL_HANDLE;
+
+    VkImage in_image_ = VK_NULL_HANDLE;
+    VkDeviceMemory in_image_memory_ = VK_NULL_HANDLE;
+    VkImageView in_image_view_ = VK_NULL_HANDLE;
+
+    // --- Persistent Output/Readback Resources ---
     VkBuffer output_buffer_device_ = VK_NULL_HANDLE;
     VkDeviceMemory output_buffer_device_memory_ = VK_NULL_HANDLE;
-
-    // This buffer is the *readback* (read by host)
     VkBuffer readback_buffer_ = VK_NULL_HANDLE;
     VkDeviceMemory readback_buffer_memory_ = VK_NULL_HANDLE;
 
-    // Descriptor Pool & Set
+    // --- Persistent Common Resources ---
     VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;
     VkDescriptorSet descriptor_set_ = VK_NULL_HANDLE;
-
-    // Synchronization
     VkFence fence_ = VK_NULL_HANDLE;
+    TimingInfo last_timings_ = {};
 
-    // --- NEW ---
-    bool is_output_int8_ = false;
-// --- END NEW ---
+    // --- Persistent AHB Input Resources (Cache) ---
+    AHardwareBuffer* last_in_ahb_ = nullptr;
+    VkImage ahb_in_image_ = VK_NULL_HANDLE;
+    VkDeviceMemory ahb_in_image_memory_ = VK_NULL_HANDLE;
+    VkImageView ahb_in_image_view_ = VK_NULL_HANDLE;
+
 
 // --- AHB Zero-Copy Output ---
 #ifdef __ANDROID__
@@ -128,6 +163,7 @@ class VulkanImageProcessor {
     // --- Private Helper Functions ---
     bool createPersistentResources();
     void destroyPersistentResources();
+    void destroyAhbInputResources();
     bool createDescriptorPool();
     bool createDescriptorSet();
 };
