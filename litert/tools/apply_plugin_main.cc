@@ -18,22 +18,17 @@
 #define INCLUDE_GOOGLE_TENSOR_COMPILE_FLAGS
 
 #include <memory>
+#include <ostream>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/flags/flag.h"  // from @com_google_absl
 #include "absl/flags/parse.h"  // from @com_google_absl
-#include "absl/functional/function_ref.h"  // from @com_google_absl
 #include "absl/strings/str_format.h"  // from @com_google_absl
 #include "litert/cc/litert_expected.h"
 #include "litert/cc/litert_opaque_options.h"
 #include "litert/cc/litert_options.h"
-#include "litert/cc/options/compiler_options.h"
-#include "litert/cc/options/litert_google_tensor_options.h"
-#include "litert/cc/options/litert_intel_openvino_options.h"
-#include "litert/cc/options/litert_mediatek_options.h"
-#include "litert/cc/options/litert_qualcomm_options.h"
 #include "litert/tools/apply_plugin.h"
 #include "litert/tools/flags/apply_plugin_flags.h"
 #include "litert/tools/flags/common_flags.h"
@@ -91,20 +86,16 @@ ApplyPluginRun::Ptr ParseFlags() {
 }
 
 template <typename T>
-bool ParseAndAddOptions(
-    litert::Options& opts, ApplyPluginRun::Ptr& run,
-    absl::FunctionRef<litert::Expected<T>()> options_from_flags) {
+bool ParseAndAddOptions(litert::Options& opts, std::ostream& dump_out,
+                        litert::Expected<T> options) {
   static_assert(std::is_base_of_v<litert::OpaqueOptions, T>);
-  litert::Expected<T> options = options_from_flags();
   if (!options) {
-    run->dump_out.Get().get()
-        << "Failed to create " << T::Discriminator()
-        << " options, Error:" << options.Error().Message() << "\n";
+    dump_out << "Failed to create " << T::Discriminator()
+             << " options, Error:" << options.Error().Message() << "\n";
     return false;
   }
   if (!opts.AddOpaqueOptions(std::move(*options))) {
-    run->dump_out.Get().get()
-        << "Failed to add " << T::Discriminator() << " options to list\n";
+    dump_out << "Failed to add " << T::Discriminator() << " options to list\n";
     return false;
   }
   return true;
@@ -142,17 +133,20 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  std::ostream& dump_out = run->dump_out.Get().get();
   bool all_flags_parsed =
-      (ParseAndAddOptions<litert::CompilerOptions>(
-           *opts, run, litert::CompilerOptionsFromFlags) &&
-       ParseAndAddOptions<litert::qualcomm::QualcommOptions>(
-           *opts, run, litert::qualcomm::QualcommOptionsFromFlags) &&
-       ParseAndAddOptions<litert::google_tensor::GoogleTensorOptions>(
-           *opts, run, litert::google_tensor::GoogleTensorOptionsFromFlags) &&
-       ParseAndAddOptions<litert::intel_openvino::IntelOpenVinoOptions>(
-           *opts, run, litert::intel_openvino::IntelOpenVinoOptionsFromFlags) &&
-       ParseAndAddOptions<litert::mediatek::MediatekOptions>(
-           *opts, run, litert::mediatek::MediatekOptionsFromFlags));
+      (ParseAndAddOptions(*opts, dump_out,
+                          litert::CompilerOptionsFromFlags()) &&
+       ParseAndAddOptions(*opts, dump_out,
+                          litert::qualcomm::QualcommOptionsFromFlags()) &&
+       ParseAndAddOptions(
+           *opts, dump_out,
+           litert::google_tensor::GoogleTensorOptionsFromFlags()) &&
+       ParseAndAddOptions(
+           *opts, dump_out,
+           litert::intel_openvino::IntelOpenVinoOptionsFromFlags()) &&
+       ParseAndAddOptions(*opts, dump_out,
+                          litert::mediatek::MediatekOptionsFromFlags()));
 
   if (!all_flags_parsed) {
     return 1;

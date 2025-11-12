@@ -261,7 +261,6 @@ cc_binary(
         ":apply_plugin_runtimecapi",
         ":outstream",
         "//litert/cc:litert_api_with_dynamic_runtime",
-        "//litert/cc/options:compiler_options",
         "//litert/tools/flags:apply_plugin_flags",
         "//litert/tools/flags:common_flags",
         "//litert/tools/flags:flag_types",
@@ -271,7 +270,6 @@ cc_binary(
         "//litert/tools/flags/vendors:qualcomm_flags_with_dynamic_runtime",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
-        "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/strings:str_format",
     ],
 )
@@ -362,6 +360,7 @@ cc_library(
     deps = [
         "//litert/c:litert_common",
         "//litert/c/internal:litert_logging",
+        "//litert/c/options:litert_mediatek_options",
         "//litert/c/options:litert_qualcomm_options",
         "//litert/cc:litert_common",
         "//litert/cc:litert_compiled_model",
@@ -376,6 +375,7 @@ cc_library(
         "//litert/cc/internal:litert_tflite_error_status_builder",
         "//litert/cc/options:litert_cpu_options",
         "//litert/cc/options:litert_gpu_options",
+        "//litert/cc/options:litert_mediatek_options",
         "//litert/cc/options:litert_qualcomm_options",
         "//litert/cc/options:litert_runtime_options",
         "//litert/core/util:perfetto_profiling",

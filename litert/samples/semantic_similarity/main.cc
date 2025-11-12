@@ -276,8 +276,9 @@ absl::Status RealMain() {
     // QNN options
     LITERT_ASSIGN_OR_RETURN(auto qnn_opts,
                             ::litert::qualcomm::QualcommOptions::Create());
-    qnn_opts.SetLogLevel(kLiteRtQualcommLogOff);
-    qnn_opts.SetHtpPerformanceMode(kLiteRtQualcommHtpPerformanceModeBurst);
+    qnn_opts.SetLogLevel(::litert::qualcomm::QualcommOptions::LogLevel::kOff);
+    qnn_opts.SetHtpPerformanceMode(
+        ::litert::qualcomm::QualcommOptions::HtpPerformanceMode::kBurst);
     options.AddOpaqueOptions(std::move(qnn_opts));
     options.SetHardwareAccelerators(accelerator);
     // Add other NPU options here..
@@ -288,9 +289,9 @@ absl::Status RealMain() {
     options.SetHardwareAccelerators(accelerator);
     // Set GPU compilation options.
   } else if (accelerator & litert::HwAccelerators::kGpu) {
-    LITERT_ASSIGN_OR_RETURN(auto gpu_compilation_options, GpuOptions::Create());
+    LITERT_ASSIGN_OR_RETURN(auto& gpu_compilation_options,
+                            options.GetGpuOptions());
     gpu_compilation_options.SetPrecision(GpuOptions::Precision::kFp32);
-    options.AddOpaqueOptions(std::move(gpu_compilation_options));
 
     options.SetHardwareAccelerators(accelerator);
   } else {
