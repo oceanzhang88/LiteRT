@@ -97,12 +97,12 @@ cc_library(
     deps = [
         ":inference_capture",
         "//litert/c:litert_common",
-        "//litert/cc:litert_compiled_model",
         "//litert/cc:litert_environment",
         "//litert/cc:litert_expected",
         "//litert/cc:litert_macros",
         "//litert/cc:litert_model",
         "//litert/cc:litert_options",
+        "//litert/cc/internal:litert_compiled_model_next",
         "//litert/test:simple_buffer",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
@@ -383,7 +383,6 @@ litert_define_ats(
         # "^(?:(?!npu_ats_87).)*$$",
     ],
     extra_flags = [
-        "--f16_range_for_f32=true",
         "--data_seed=42",
     ],
     jit_suffix = "",
