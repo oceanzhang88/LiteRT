@@ -62,10 +62,10 @@ cc_library(
     deps = [
         "//litert/c:litert_common",
         "//litert/cc:litert_common",
-        "//litert/cc:litert_compiled_model",
         "//litert/cc:litert_environment",
         "//litert/cc:litert_model",
         "//litert/cc:litert_tensor_buffer",
+        "//litert/cc/internal:litert_compiled_model_next",
         "//litert/core/model",
         "//litert/test:matchers",
         "@com_google_absl//absl/strings:string_view",
@@ -420,6 +420,7 @@ cc_binary(
     srcs = ["dummy_binary.cc"],
     copts = ["-DGOOGLE_COMMANDLINEFLAGS_FULL_API=1"] + if_oss(["-DABSL_FLAGS_STRIP_NAMES=0"]),
     deps = [
+        "//litert/cc/internal:litert_detail",
         "//litert/core:filesystem",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/flags:flag",

@@ -51,8 +51,10 @@ litert_test(
         "//litert/test/generators",
         "//litert/test/generators:common",
         "//tflite/schema:schema_fbs",
+        "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/flags:parse",
         "@com_google_absl//absl/log:absl_check",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -384,6 +386,10 @@ litert_define_ats(
     ],
     extra_flags = [
         "--data_seed=42",
+        "--qualcomm_optimization_level=O3",
+        "--qualcomm_use_htp_preference",
+        "--qualcomm_htp_performance_mode=burst",
+        "--qualcomm_log_level=off",
     ],
     jit_suffix = "",
 )
