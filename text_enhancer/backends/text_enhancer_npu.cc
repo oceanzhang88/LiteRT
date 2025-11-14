@@ -13,15 +13,15 @@ namespace {
 litert::Options CreateNpuOptions() {
     LITERT_ASSIGN_OR_ABORT(auto qnn_options, litert::qualcomm::QualcommOptions::Create());
     // Add any NPU-specific options here if needed
-    qnn_options.SetHtpPerformanceMode(kLiteRtQualcommHtpPerformanceModeBurst);
+    qnn_options.SetHtpPerformanceMode(litert::qualcomm::QualcommOptions::HtpPerformanceMode::kBurst);
     qnn_options.SetUseFoldReLU(true);
     qnn_options.SetUseConvHMX(true);
     qnn_options.SetNumHvxThreads(4);
     qnn_options.SetUseHtpPreference(true);
-    qnn_options.SetOptimizationLevel(kHtpOptimizeForInferenceO3);
+    qnn_options.SetOptimizationLevel(litert::qualcomm::QualcommOptions::OptimizationLevel::kOptimizeForInferenceO3);
 
     LITERT_ASSIGN_OR_ABORT(litert::Options options, litert::Options::Create());
-    options.SetHardwareAccelerators(kLiteRtHwAcceleratorNpu);
+    options.SetHardwareAccelerators(litert::HwAccelerators::kNpu);
     options.AddOpaqueOptions(std::move(qnn_options));
     return options;
 }
