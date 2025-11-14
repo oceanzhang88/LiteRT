@@ -16,7 +16,7 @@ litert::Options CreateCpuOptions() {
 
     LITERT_ASSIGN_OR_ABORT(litert::Options options, litert::Options::Create());
     options.AddOpaqueOptions(std::move(cpu_options));
-    options.SetHardwareAccelerators(kLiteRtHwAcceleratorCpu);
+    options.SetHardwareAccelerators(litert::HwAccelerators::kCpu);
     return options;
 }
 }  // namespace

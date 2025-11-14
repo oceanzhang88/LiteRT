@@ -16,13 +16,13 @@ litert::Options CreateGpuOptions() {
 
     LITERT_ASSIGN_OR_ABORT(auto gpu_options, litert::GpuOptions::Create());
     LITERT_ABORT_IF_ERROR(
-        gpu_options.SetGpuBackend(kLiteRtGpuBackendOpenCl));  // Android
+        gpu_options.SetBackend(litert::GpuOptions::Backend::kOpenCl));  // Android
                                                               // kLiteRtGpuBackendOpenCl
 
     LITERT_ABORT_IF_ERROR(gpu_options.EnableExternalTensorsMode(true));
 
     LITERT_ASSIGN_OR_ABORT(litert::Options options, litert::Options::Create());
-    options.SetHardwareAccelerators(kLiteRtHwAcceleratorGpu);
+    options.SetHardwareAccelerators(litert::HwAccelerators::kGpu);
     options.AddOpaqueOptions(std::move(gpu_options));
     return options;
 }
